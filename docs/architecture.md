@@ -101,16 +101,16 @@ same checks run from C5 and from `self-review`.
 
 ## Tune mode
 
-1. **Trigger.** Start with `tune:` or say the lab-forge skill name. Example:
-   `tune: fewer tests`. Phrases like "always", "stop doing", "from now on" also
-   suggest tuning, but the agent asks once before it treats them as tune.
+1. **Trigger.** Automatic. Lasting intent ("always", "stop doing", "from now on",
+   "fewer tests") is applied as tune with no question; `tune:` forces it.
 2. **Scope.** If the user names a scope, use it. Otherwise: repo facts go to repo,
    behaviour and style go to global. A request for this session only is never
    stored.
 3. **Write.** Add one imperative line. Global lines go to `~/.lab-forge/overrides.md`.
    Repo lines go to `## Overrides` in the repo `AGENTS.md`. If a new line
    contradicts an older one, replace the old line. Do not append both.
-4. **Confirm.** Show the diff in 3 lines or fewer, write it, and log one line in `state.md`.
+4. **Report.** Write first, then show the diff in ≤3 lines; `undo` reverts it.
+   Log one line in `state.md`.
 5. **Escalate.** If the bench shows an override is ignored, follow the order in
    `references/tune.md`: move it up, make it concrete, dedupe, check that the
    file is read, then offer a guard.
