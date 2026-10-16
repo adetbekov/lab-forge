@@ -1,6 +1,6 @@
 ---
 name: lab-forge
-description: Deploys and maintains an AI working environment for a data scientist or ML/AI engineer inside any IDE agent (GitHub Copilot, Claude Code, Cursor, Codex, corporate wrappers). Onboards on the machine, audits existing projects, finds problems and proposes fixes, interviews only for what it could not detect, then generates one canonical rules file plus thin pointers, skills, prompt commands and optional guards in the author's style, and installs bundled skills as-is. Use this skill whenever the user wants to set up, bootstrap, onboard, standardize, audit or fix their AI coding setup, instructions, skills, commands or agents; complains that the agent writes slop, too much code or not in their style; moves to a new machine, VDI or project; or says "lab-forge", "tune lab-forge", "forge", "разверни систему", "настрой агента под меня". Also use it to adjust an already deployed setup (tune mode).
+description: Deploys and maintains an AI working environment for a data scientist or ML/AI engineer inside any IDE agent (GitHub Copilot, Claude Code, Cursor, Codex, corporate wrappers). Onboards on the machine, audits existing projects, finds problems and proposes fixes, interviews only for what it could not detect, then generates one canonical rules file plus thin pointers, skills, prompt commands and optional guards in the author's style, and installs bundled skills as-is. Use this skill whenever the user wants to set up, bootstrap, onboard, standardize, audit or fix their AI coding setup, instructions, skills, commands or agents; complains that the agent writes slop, too much code or not in their style; moves to a new machine, VDI or project; or says "lab-forge", "tune lab-forge", "forge", "разверни систему", "настрой агента под меня". Also use it to adjust an already deployed setup (tune mode), including one-phrase preferences like "always ...", "never ...", "fewer tests", "пиши короче", "tune: ...".
 ---
 
 # lab-forge - AI work environment for DS/ML engineers
@@ -17,8 +17,8 @@ are tune mode: surgical edits, never a rebuild.
 ## Fixed principles
 
 1. **Detect before asking.** Every question the filesystem can answer is not asked.
-   Ask only what detection could not settle, one question at a time, each with a
-   recommended answer.
+   Ask only when the answer changes the result, as a real choice of 2-4 options
+   (`references/interview.md`). Otherwise decide and state the assumption.
 2. **Ceremony scales with the task.** Generated rules must let a small task be
    just done. Plans, specs, ADRs appear only for big or irreversible work.
 3. **Markdown diet.** Every generated file has a line budget
@@ -42,8 +42,9 @@ are tune mode: surgical edits, never a rebuild.
 ## Modes
 
 - **Deploy** - no `.lab-forge/state.md` found. Run phases 0-6.
-- **Tune** - state file exists, or the user asks to change the setup. Read
-  `references/tune.md` and skip the rest.
+- **Tune** - state file exists, the user asks to change the setup, or a phrase
+  sets lasting behaviour ("always", "fewer tests", "пиши короче"). Read
+  `references/tune.md`, apply without asking, and skip the rest.
 - **Audit only** - user wants a review without changes. Phases 0-1, report, stop.
 
 ## Deploy workflow

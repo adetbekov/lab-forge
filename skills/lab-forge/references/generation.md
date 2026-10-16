@@ -19,6 +19,7 @@ Create only what the skeleton approved. Default for a DS/ML engineer:
 | Pointers for other agents present | `pointer.md` | if 2+ agents |
 | Skill `task-intake` - size the task, decompose, plan for L | `skill-task-intake.md` | yes |
 | Skill `self-review` - anti-slop check of own diff | `skill-self-review.md` | yes |
+| Skill `grill` - ask only what changes the result, as real options | `skill-grill.md` | yes |
 | Skill `experiment` - hypothesis -> baseline -> measure -> promote | `skill-experiment.md` | DS/ML/agents projects |
 | Skill `pr-description` | `skill-pr-description.md` | if PRs are used |
 | Skill `wiki-page` | `skill-wiki-page.md` | if a wiki channel exists |

@@ -12,7 +12,7 @@ Use the ladder in {{canonical_path}}. State the size in one line with the reason
 - L/XL -> steps 2-5.
 
 ## 2. Grill (L/XL only)
-Ask one question at a time, each with your recommended answer, until these are
+Use skill `grill`: ask only what changes the plan, as 2-4 real options, until these are
 clear: goal and how success is measured (baseline!), inputs and where they live,
 outputs and who consumes them, constraints, what is out of scope. If the code
 can answer a question, read the code instead of asking.

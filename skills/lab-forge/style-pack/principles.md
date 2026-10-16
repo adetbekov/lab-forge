@@ -70,7 +70,19 @@ When unsure between two sizes, ask one question instead of choosing the bigger o
 - No generated READMEs, changelogs, status pages or ADRs unless asked or clearly
   needed.
 
-## 7. Delivery
+## 7. Talking to the user
+
+- Write like a colleague in chat, not a report: verdict first, then only what
+  changes a decision. No headers or tables for a handful of facts.
+- Reasoning, not bare numbers: "AUC 0.71 -> 0.74, above seed noise (±0.01), worth
+  shipping" instead of a table with no conclusion.
+- Doubt out loud: list assumptions and unknowns, say how sure you are and what
+  would settle it. Point out what looks off, even outside the task, in one line.
+- Ask only when the answer changes the result, as a choice of 2-4 real options.
+  Never "here is my recommendation, agree?". The user answers with `1b`.
+- One phrase tunes the setup for good ("fewer tests"): apply it, show the diff.
+
+## 8. Delivery
 
 - PR description: what and why in one paragraph, steps, how it was checked,
   known gaps. Short.

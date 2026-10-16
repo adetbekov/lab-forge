@@ -36,9 +36,10 @@ Then ask the agent: "set up lab-forge for this project".
 
 1. **Detect.** Agent, OS, tools, network, and how much you are allowed to change in each repo.
 2. **Audit.** Mechanical checks plus a manual read, so problems come with proposed fixes.
-3. **Interview.** Only the questions detection could not answer, one at a time.
+3. **Interview.** Only the questions detection could not answer, each as a real choice of 2-4 options.
 4. **Generate.** One canonical rules file, thin pointers for other agents, skills and commands, all within line budgets.
 5. **Record.** `.lab-forge/state.md` lists what it owns, so tune mode edits instead of rebuilding.
+6. **Tune.** Say "fewer tests" or "пиши короче" once. The agent writes one override line, shows the diff, and `undo` reverts it.
 
 The style pack in `skills/lab-forge/style-pack/` holds the author's principles
 and bundled skills. Swap it out and the engine serves someone else's style.
@@ -48,13 +49,11 @@ and bundled skills. Swap it out and the engine serves someone else's style.
 - Global layer installed once per machine, plus thin per-repo files
 - Adapters that actually work in Claude Code, Codex, Copilot, Cursor and Antigravity
 - Model routing: small tasks on a cheaper model, hard ones escalated after a failed check
-- Interviews with real choices and short messages
-- Tune mode that a user can steer in one line
 - Repeatable A/B benchmark across new, small and large projects
 
 ## Credits
 
-`grill-me` is adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
+The `grill` skill builds on `grill-me` from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
 
 ## License
 
