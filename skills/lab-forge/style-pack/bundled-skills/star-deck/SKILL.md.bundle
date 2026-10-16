@@ -1,0 +1,105 @@
+---
+name: star-deck
+description: Generate clean, white-background, Apple-style presentations for engineers (analysts, developers, data scientists, ML). Use this skill whenever the user asks for a presentation, slide deck, slides, a talk, a demo-day deck, a project update, a conference talk, a quarterly review, or wants to turn a project, report, notebook, or document into slides — even if they don't say the word "presentation". Structure-first workflow (STAR skeleton → grill the author → slide titles → content), fixed design system, Excalidraw-only diagrams, Apple emoji as PNG, progressive one-idea-per-slide builds, hypothesis-driven framing, always ends with summary and Q&A.
+---
+
+# star-deck — clean presentations for engineers
+
+A presentation does not start with slides; it starts with structure. Build by
+evolution, high level → low level: STAR skeleton → grilling → slide titles →
+content. Never skip a phase; never open a slide tool first.
+
+## Fixed principles (every deck)
+
+1. **Fixed Apple-clean design.** White background, black text, gray borderless
+   cards, one blue accent. Read `references/design-system.md` before any slide;
+   take every value from it — never from memory.
+2. **One idea per slide; blocks, not bullets.** Third consecutive bullet-list
+   slide → stop, convert to blocks or a diagram.
+3. **≤ 40 words body per slide.** Doesn't fit → split, never shrink.
+4. **No special symbols.** Pictogram needed → Apple emoji as PNG
+   (`scripts/fetch_apple_emoji.py`); not needed → plain text.
+5. **Excalidraw only** for every scheme/flow/architecture
+   (`references/excalidraw.md`). No mermaid, no shape soup.
+6. **Left → right flow** — diagrams, comparisons, builds: input left, output right.
+7. **One-minute rule.** A logical slide worth < 1 minute of speech gets merged or
+   cut. (A logical slide may span several physical build slides — the rule applies
+   to the logical unit.)
+8. **Progressive disclosure.** N pieces of info → N physical slides, elements
+   appearing one by one: new element loud, previous dimmed. That's one logical
+   slide; same applies to slide groups on one theme.
+9. **Demo before Action** — prove it runs, then explain how.
+10. **Ritual ending:** Results (wow numbers) → Summary (always) → Plans (optional)
+    → Q&A (always).
+11. **Iterating on an approved deck: surgical edits only.** Once the user has
+    approved a deck, feedback means editing that build in place — same story,
+    titles, order, layouts. Never rebuild or re-imagine it; regenerate only the
+    slides the feedback touches.
+
+## Workflow
+
+**Phase 0 — Inputs.** Topic, audience (internal/conference/executive), duration,
+language, format (PPTX default; HTML/Slidev/Google Slides/PDF/Keynote →
+`references/formats.md`), animation on/off (default off), source material.
+Slide budget (logical): 5 min → 5–7, 15 → 12–15, 30 → 25–30, 45 → 35–45; physical
+may be 2–3× (builds).
+
+**Phase 1 — STAR skeleton.** Read `references/narrative.md`. One-page skeleton:
+Situation/Task/Action/Result ≈ 20/10/60/10 + fixed slots (title, speaker, agenda,
+demo, summary, Q&A). Task = Lean UX hypothesis: "We believe that [X] for [people]
+will achieve [outcome], using [approach]. We will know we are right when we see
+[signal]." Result answers that signal.
+
+**Phase 2 — Grill the author.** Protocol in `references/narrative.md`. One question
+at a time, branch by branch (takeaway, falsifiability, demo, real failures, real
+numbers, cuts) until resolved. No user available → self-grill 10 toughest
+questions, list assumptions atop the outline.
+
+**Phase 3 — Slide titles.** Expand skeleton to ordered **action titles** (full
+takeaway sentences, not labels) + slide type + exhibit per entry. Ghost deck test:
+titles alone must tell the whole story. Apply one-minute rule. **Get user
+confirmation of the outline before any content.**
+
+**Phase 4 — Content + render.** Components from `references/components.md`; values
+from `references/design-system.md`; diagrams per `references/excalidraw.md`
+(.excalidraw source saved next to PNG); emoji via `scripts/fetch_apple_emoji.py`.
+Builds: N duplicates, one change each, previous dimmed; animation enabled →
+appear/fade steps instead. Exhibits land clean first — captions/verdicts/side
+notes arrive on the next build step (annotation-as-next-step, components.md). Rendering per `references/formats.md` — clean layout,
+no AI slop (gradients, glassmorphism, icon-card grids, purple).
+
+**Network fallback protocol — ask FIRST, degrade after.** On the first failed
+service call, stop and ask the user for access ("emoji CDN / kroki.io
+unreachable — can you enable network access, or should I use offline
+fallbacks?"). Only after access is declined (or in batch mode) walk the chain:
+
+- Emoji: CDN → **ask** → npm `emoji-datasource-apple` → build without emoji
+  (never text emoji).
+- Diagrams: Kroki → **ask** → npm `excalidraw-to-svg` →
+  `scripts/render_excalidraw_local.py` (bundled). Never native PPT/HTML shapes.
+
+Whatever path was taken, list it in the delivery report and outline.md.
+
+**Phase 5 — QA. Assume there are problems.** Render every slide to image and look:
+overflow, overlaps, margins < 0.5", body < 18pt or > 40 words, repeated layouts,
+bullet slides that should be blocks, non-left→right diagrams, undimmed previous
+elements, text-emoji or special symbols. Hierarchy pass: two competing dominant
+elements, semantic color in a title, gray primary content or gray main-flow
+diagram strokes, unreadable dimmed text, flat unaccented block lists, uneven card
+paddings, loose line-height on big statements. Grep for placeholders
+(`lorem|TODO|xxx`). Verify ritual ending. Fix → re-render → re-check (≥ 1 cycle).
+Deliver deck + outline.md + .excalidraw sources + build script (reproducible).
+
+## Files
+
+| File | When |
+|---|---|
+| `references/narrative.md` | Phases 1–3 |
+| `references/design-system.md` | Phase 4 (always) |
+| `references/components.md` | Phase 4 (always) |
+| `references/excalidraw.md` | Phase 4, any diagram |
+| `references/formats.md` | Phase 4, rendering |
+| `scripts/fetch_apple_emoji.py` | Any emoji |
+| `scripts/gen_verdict_badges.py` | Pass/fail check & cross badges (PIL, offline) |
+| `scripts/render_excalidraw.sh` | Render diagrams (Kroki API) |
+| `scripts/render_excalidraw_local.py` | Offline diagram renderer (Kroki blocked) |
