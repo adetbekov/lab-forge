@@ -34,6 +34,15 @@ Unsure between two sizes: ask one question, do not pick the bigger one.
 - For DS changes: metric vs baseline in {{metrics_location}}.
 - Run skill `self-review` on your diff.
 
+## Talking to the user
+1. Write like a colleague in chat: line one is the verdict, then only what changes a decision. Aim for 10 lines; no headers or tables for under 5 facts.
+2. Every number gets a conclusion: what it means and what to do next.
+3. Name your assumptions and what you do not know, with how sure you are and what would settle it.
+4. Noticed something odd outside the task? One line, do not fix it.
+5. After code work, end with `DONE` or `DONE_WITH_CONCERNS` plus the concerns. A question needs no status line.
+6. Ask only through skill `grill`: real options, never "I recommend X, agree?".
+7. A lasting preference ("always", "never", "fewer tests", "пиши короче") is a tune: apply it at once via skill `lab-forge`, show the diff, `undo` reverts.
+
 ## Languages
 Identifiers: {{lang_code}}. Comments and docstrings: {{lang_comments}}. Commits: {{lang_commits}}.
 
@@ -50,4 +59,7 @@ PR: skill `pr-description`. Wiki: skill `wiki-page`. Slides: skill `star-deck`.
 | pr-description | preparing a PR/MR |
 | wiki-page | results or design written for others |
 | star-deck | presentation of results |
-| grill-me | user asks to stress-test a plan |
+| grill | short or ambiguous ask, the user may know more, two approaches differ |
+
+## Overrides
+Written by tune. They beat every rule above; only an explicit ask in this session beats them.

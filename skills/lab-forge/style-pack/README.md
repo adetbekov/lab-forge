@@ -11,7 +11,6 @@ Current bundled skills:
 
 | Skill | Why it ships |
 |---|---|
-| `grill-me` | one-question-at-a-time interview; used by the intake skill for L tasks (adapted from mattpocock/skills, MIT) |
 | `star-deck` | presentations of results in the author's format |
 
 To make your own pack: replace `principles.md` with your ideas (keep the section
