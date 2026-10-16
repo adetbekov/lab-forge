@@ -1,7 +1,9 @@
 """Write one tune override line, log it, print the diff. Undo reverts the last tune.
 
 Stdlib only. Global overrides live in $LAB_FORGE_HOME/overrides.md (default ~/.lab-forge),
-repo overrides in the `## Overrides` section of <repo>/AGENTS.md.
+repo overrides in the `## Overrides` section of <repo>/AGENTS.md. At ownership level 0
+(no <repo>/.lab-forge/state.md, or it says level 0) nothing is written to the repo: repo lines
+go to global overrides with a `[<repo name>]` prefix.
 
 Usage:
     python tune.py add --scope global|repo "<line>" [--replace "<old line>"] [--repo DIR]
@@ -25,6 +27,14 @@ def paths(scope, repo):
         home = Path(os.environ.get("LAB_FORGE_HOME", Path.home() / ".lab-forge"))
         return home / "overrides.md", home / "state.md"
     return repo / "AGENTS.md", repo / ".lab-forge" / "state.md"
+
+
+def repo_level_zero(repo):
+    state = repo / ".lab-forge" / "state.md"
+    if not state.exists():
+        return True
+    level = re.search(r"^- Level:(.*)$", state.read_text(encoding="utf-8"), flags=re.M)
+    return bool(level and re.search(r"\b0\b", level[1]))
 
 
 def section_bounds(text, scope):
@@ -71,7 +81,7 @@ def log(state, scope, new, old):
     text = state.read_text(encoding="utf-8").splitlines() if state.exists() else ["## Log"]
     if "## Log" not in text:
         text += ["", "## Log"]
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     end = next((i for i in range(text.index("## Log") + 1, len(text)) if text[i].startswith("## ")),
                len(text))
     text.insert(end, f"- {stamp} tune {scope} {json.dumps([new, old], ensure_ascii=False)}")
@@ -102,7 +112,12 @@ def main():
     if args.action == "add":
         if not args.line or not args.scope:
             parser.error("add needs a line and --scope")
-        apply(args.scope, args.repo, args.line.strip(), args.replace and args.replace.strip())
+        scope, line, old = args.scope, args.line.strip(), args.replace and args.replace.strip()
+        if scope == "repo" and repo_level_zero(args.repo):
+            tag = f"[{args.repo.resolve().name}] "
+            scope, line, old = "global", tag + line, old and tag + old
+            print("level 0: nothing is written to the repo; stored in global overrides")
+        apply(scope, args.repo, line, old)
     else:
         scope, (new, old) = last_tune(args.repo)
         apply(scope, args.repo, old, new)

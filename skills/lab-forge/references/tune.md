@@ -15,6 +15,8 @@ line: "say `tune:` to keep it". Never ask.
 - Repo facts (paths, commands, data, domain words) go to `repo`.
 - Behaviour and style go to `global`.
 - "Only now" or "this session" is never stored.
+- Level 0 (`environment.md` section 3): nothing goes into the repo. `tune.py`
+  stores repo lines in global overrides with a `[<repo>]` prefix.
 
 ## 3. Write one line
 Turn the phrase into one imperative line with a concrete action:
@@ -23,7 +25,7 @@ unless asked." If an older override says the opposite, replace it. Never keep
 both. Then run:
 
 ```
-python scripts/tune.py add --scope global|repo "<line>" [--replace "<old line>"]
+python scripts/tune.py add --scope global|repo "<line>" [--replace "<old line>"] --repo <project root>
 ```
 
 It writes `~/.lab-forge/overrides.md` (global) or `## Overrides` in the repo
@@ -32,7 +34,7 @@ It writes `~/.lab-forge/overrides.md` (global) or `## Overrides` in the repo
 ## 4. Report
 Reply with the diff only (3 lines max) and `undo` as the way back. Then follow the
 new line from the next action on, in the same session. `undo` runs
-`python scripts/tune.py undo`.
+`python scripts/tune.py undo --repo <project root>`.
 
 ## 5. Larger changes
 - **New skill or command**: create it from templates and add one row to the skills table.
