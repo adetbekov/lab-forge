@@ -1,0 +1,28 @@
+title = "Existing large repo: optuna (~70k lines of Python)"
+kind = "existing"
+repo = "https://github.com/optuna/optuna"
+ref = "v5.0.0"
+packages = ["-e .", "pytest", "ruff"]
+scope = ["optuna/**", "tests/**"]
+pytest = "changed"
+review = "The pristine base repo is in BASE. Run each side's new or changed tests with `.venv/bin/python -m pytest -q <files>` from a copy of the snapshot; do not run the full suite. Compare logging and module layout against BASE."
+
+[[steps]]
+id = "P1"
+kind = "code"
+prompt = "Trials sometimes get re-run with identical parameters (for example after a restart), which wastes the budget. Add a pure function `find_duplicate_trials(trials)` that takes a sequence of `FrozenTrial` and returns the groups of COMPLETE trials whose `params` are identical, as a list of lists of trial numbers (numbers ascending, groups ordered by their first number, only groups of two or more). Put it where similar study-level helpers live, follow the existing patterns, and cover it with unit tests. Do not wire it into `optimize` yet. Commit when done."
+
+[[steps]]
+id = "P2"
+kind = "code"
+prompt = "The last commit added a pure function that finds duplicate trials. Now wire it in: when `Study.optimize` finishes and the study has duplicate COMPLETE trials, emit exactly one warning through optuna's logger that lists the duplicate groups. Do not change the trials and do not change the `optimize` signature. Tests. Commit when done."
+
+[[steps]]
+id = "T"
+kind = "tune"
+prompt = "From now on, answer my questions about this project in Russian."
+
+[[steps]]
+id = "P3"
+kind = "question"
+prompt = "How does TPESampler choose the next parameter values: which functions, in order, from `study.optimize` to the sampled value? And where are `n_startup_trials` and `gamma` applied? Answer briefly with file:line references."

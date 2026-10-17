@@ -1,0 +1,28 @@
+title = "Existing small repo: category_encoders (~8k lines of library code)"
+kind = "existing"
+repo = "https://github.com/scikit-learn-contrib/category_encoders"
+ref = "v2.11.1"
+packages = ["-e .", "pytest", "pytest-subtests", "ruff"]
+scope = ["category_encoders/**", "tests/**"]
+pytest = "changed"
+review = "The pristine base repo is in BASE. Run each side's changed tests with `.venv/bin/python -m pytest -q <files>` from a copy of the snapshot. For P2 check invalid `log_base` values (1, 0.5, 'abc', True) raise ValueError at fit, not at construction."
+
+[[steps]]
+id = "P1"
+kind = "code"
+prompt = "Add a `log_counts` option to `CountEncoder` (default False). When True, each category is encoded as `log1p(count)` instead of the raw count. It cannot be combined with `normalize=True`: that combination must raise `ValueError` when `fit` is called. The new parameter must work with sklearn `clone` and `get_params`. Tests included. Commit when done."
+
+[[steps]]
+id = "P2"
+kind = "code"
+prompt = "Make the log in `CountEncoder` configurable: add a `log_base` parameter (a number greater than 1, default e) used when `log_counts=True`, so the encoding becomes log base `log_base` of (1 + count). Invalid values (1 or less, non-numeric, or bool) must raise `ValueError` when `fit` is called. Leave the default behaviour unchanged. Tests. Commit when done."
+
+[[steps]]
+id = "T"
+kind = "tune"
+prompt = "From now on, answer my questions about this project in Russian."
+
+[[steps]]
+id = "P3"
+kind = "question"
+prompt = "How does CountEncoder decide which categories are merged into the minimum-group bucket, and what value does an unseen category get at transform time? Where is each of these configured? Answer briefly with file:line references."

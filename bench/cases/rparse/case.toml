@@ -1,0 +1,26 @@
+title = "New project, LLM app: receipt parser with eval"
+kind = "new"
+packages = ["pydantic", "numpy", "pandas", "pytest", "ruff"]
+pytest = "all"
+brief = "an LLM-based receipt text parser (turns raw OCR receipt text into structured line items) with an offline evaluation harness and a golden set; LLM client must be pluggable, tests run offline with a fake client. Python 3.12, pydantic, pytest, ruff."
+review = "Run `.venv/bin/python -m rparse.eval`, pytest and ruff from the snapshot root. Check eval soundness (is F1 meaningful, is the fake client fitted to the golden set), retry logic, LLM-app hygiene (prompt versioning, schema validation, pluggability)."
+
+[[steps]]
+id = "P1"
+kind = "code"
+prompt = "Start the project: an LLM-based receipt parser. `parse_receipt(text) -> Receipt` turns raw OCR receipt text into structured line items (name, quantity, unit price, line total) plus the receipt total, using an LLM behind a pluggable client interface. Since we're offline, include a deterministic fake client (rule-based is fine) so everything runs and tests pass without network. Add an offline eval harness: a golden set of ~8 receipts and a scorer reporting item-level F1 and total-match rate, runnable as `python -m rparse.eval` from the project root. pytest tests. Commit when done."
+
+[[steps]]
+id = "P2"
+kind = "code"
+prompt = "Next step for the receipt parser: real LLMs sometimes return malformed JSON or JSON that fails validation (sometimes wrapped in ``` fences). Make parsing robust: strip fences, and on malformed/invalid output retry with the validation error fed back to the model, up to a configurable number of attempts; after that raise a clear error. Also add per-field accuracy (name, quantity, unit_price, line_total) to the eval report. Cover the retry path with tests using a client that returns bad output first. Commit when done."
+
+[[steps]]
+id = "T"
+kind = "tune"
+prompt = "From now on, answer my questions about this project in Russian."
+
+[[steps]]
+id = "P3"
+kind = "question"
+prompt = "If the LLM keeps returning malformed JSON, what exactly happens step by step until the caller gets an error? And how do I add a new golden receipt to the eval? Answer briefly with file:line references."

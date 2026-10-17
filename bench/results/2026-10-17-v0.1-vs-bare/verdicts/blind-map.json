@@ -1,0 +1,34 @@
+{
+ "churn-r1": {
+  "X": "lab",
+  "Y": "bare"
+ },
+ "churn-r2": {
+  "X": "lab",
+  "Y": "bare"
+ },
+ "encoders-r1": {
+  "X": "bare",
+  "Y": "lab"
+ },
+ "encoders-r2": {
+  "X": "bare",
+  "Y": "lab"
+ },
+ "optuna-r1": {
+  "X": "bare",
+  "Y": "lab"
+ },
+ "optuna-r2": {
+  "X": "lab",
+  "Y": "bare"
+ },
+ "rparse-r1": {
+  "X": "bare",
+  "Y": "lab"
+ },
+ "rparse-r2": {
+  "X": "lab",
+  "Y": "bare"
+ }
+}
