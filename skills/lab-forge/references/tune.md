@@ -15,7 +15,8 @@ line: "say `tune:` to keep it". Never ask.
 - Repo facts (paths, commands, data, domain words) go to `repo`.
 - Behaviour and style go to `global`.
 - "Only now" or "this session" is never stored.
-- Level 0 (`environment.md` section 3): nothing goes into the repo. `tune.py`
+- Level 0 (`environment.md` section 3), or the repo is on its default branch
+  (the guard forbids edits there): nothing goes into the repo. `tune.py`
   stores repo lines in global overrides with a `[<repo>]` prefix.
 
 ## 3. Write one line

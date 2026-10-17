@@ -44,6 +44,14 @@ def targets():
     }
 
 
+SKILL_DIRS = {
+    "claude": Path.home() / ".claude" / "skills",
+    "codex": Path.home() / ".agents" / "skills",
+    "copilot": Path.home() / ".copilot" / "skills",
+    "antigravity": Path.home() / ".gemini" / "antigravity" / "skills",
+}
+
+
 def read(path):
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
@@ -102,7 +110,8 @@ def put_settings(path, kind, hooks):
             *[n for n in ([names] if isinstance(names, str) else names) if n != "AGENTS.md"],
         ]
     elif hooks:
-        command = f'"{sys.executable}" "{lf_home() / "hooks" / "guard.py"}" hook'
+        python = getattr(sys, "_base_executable", sys.executable)  # a project venv can disappear
+        command = f'"{python}" "{lf_home() / "hooks" / "guard.py"}" hook'
         entries = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
         entries[:] = [e for e in entries if "lab-forge" not in json.dumps(e)]
         entries.append({"matcher": HOOK_MATCH[kind], "hooks": [{"type": "command", "command": command}]})
@@ -111,6 +120,23 @@ def put_settings(path, kind, hooks):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print(f"settings: {path}")
+
+
+def put_engine(skills_dir):
+    """The engine itself as a user skill, so tune works in every repo. A link where the OS allows it."""
+    dest = skills_dir / "lab-forge"
+    if dest.resolve() == ENGINE:
+        return
+    if dest.is_symlink() or dest.is_file():
+        dest.unlink()
+    elif dest.exists():
+        shutil.rmtree(dest)
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.symlink_to(ENGINE, target_is_directory=True)
+    except OSError:
+        shutil.copytree(ENGINE, dest)
+    print(f"skill: {dest}")
 
 
 def install(harnesses, hooks):
@@ -123,6 +149,8 @@ def install(harnesses, hooks):
         (lf / "overrides.md").write_text("# Overrides\n", encoding="utf-8")
     shutil.copy(ENGINE / "scripts" / "guard.py", lf / "hooks" / "guard.py")
     save_state(canary, harnesses, repos)
+    for skills_dir in {SKILL_DIRS[h] for h in harnesses if h in SKILL_DIRS}:
+        put_engine(skills_dir)
     for name in harnesses:
         rules_file, settings = targets()[name]
         if rules_file:

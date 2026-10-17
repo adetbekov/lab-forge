@@ -39,7 +39,8 @@ optional and read on demand.
 
 ### Where each harness reads it
 
-✓ = confirmed by docs, ~ = community only. The smoke test in JEB-1879 must turn every ~ into ✓ or a fallback.
+✓ = confirmed by docs, ~ = community only. `scripts/smoke.py` turns a ~ into ✓ per machine;
+results so far are in the open items.
 
 | Harness | Global rules | Global skills | Repo rules | Subagents | Hooks |
 |---|---|---|---|---|---|
@@ -145,6 +146,8 @@ win.
 
 ## Open items
 
-- Every ~ cell in the harness table needs a smoke test (JEB-1879).
+- Smoke (`scripts/smoke.py`), 2026-10-18: Gemini CLI loads `~/.gemini/GEMINI.md` ✓ and
+  repo `AGENTS.md` only with `context.fileName` (now set by the installer). Claude Code,
+  Codex, Copilot, Cursor and Antigravity IDE still need a run on a logged-in machine.
 - Model Routing Playbook (@donimas) not found. C8 rests on Claude and Codex docs
   and superpowers SDD.

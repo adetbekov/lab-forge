@@ -41,6 +41,7 @@ def test_install_writes_one_source_and_blocks(tmp_path):
     assert canary in (tmp_path / ".gemini" / "GEMINI.md").read_text()
     hooks = json.loads((tmp_path / ".claude" / "settings.json").read_text())["hooks"]["PreToolUse"]
     assert len(hooks) == 1 and "guard.py" in hooks[0]["hooks"][0]["command"]
+    assert (tmp_path / ".claude" / "skills" / "lab-forge" / "SKILL.md").exists()
     # idempotent: same canary, one block, one hook
     script("install_global.py", "install", home=tmp_path)
     assert claude_md.read_text().count("lab-forge:begin") == 1
@@ -60,6 +61,16 @@ def test_tune_reaches_copies_and_check_finds_drift(tmp_path):
     codex.write_text(codex.read_text().replace("Russian", "French"))
     res = script("install_global.py", "check", home=tmp_path)
     assert res.returncode == 1 and "DRIFT" in res.stdout
+
+
+def test_repo_tune_on_main_goes_to_global(tmp_path):
+    script("install_global.py", "install", "--harness", "claude", home=tmp_path)
+    proj = repo(tmp_path / "proj")
+    (proj / ".lab-forge").mkdir()
+    (proj / ".lab-forge" / "state.md").write_text("- Level: 1\n")
+    script("tune.py", "add", "--scope", "repo", "Answer in Russian.", "--repo", str(proj), home=tmp_path)
+    assert not (proj / "AGENTS.md").exists()
+    assert "- [proj] Answer in Russian." in (tmp_path / ".lab-forge" / "overrides.md").read_text()
 
 
 def test_hook_blocks_edits_and_commits_on_main_only(tmp_path):

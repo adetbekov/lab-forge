@@ -3,7 +3,8 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest result: [`results/2026-10-17-v0.1-vs-bare`](results/2026-10-17-v0.1-vs-bare/report.md).
+Latest results: [`results/2026-10-17-v0.1-vs-bare`](results/2026-10-17-v0.1-vs-bare/report.md),
+[`results/2026-10-18-layers-vs-v0.1`](results/2026-10-18-layers-vs-v0.1/notes.md).
 
 ## Run it
 
@@ -72,7 +73,8 @@ Pains are numbered as in [`docs/architecture.md`](../docs/architecture.md).
 | 16 | Misses the big picture | blind `correctness`, `practices` | judge |
 | 18 | Style differs every time | stability across repeats: Jaccard of changed files × line ratio | diff |
 | 19 | Tuning in one phrase | `T` applied in the next session (P3 answered in Russian) | reply |
-| 6, 12 | Stale docs, tech debt | not measured yet: needs longer chains of steps | — |
+| 6 | Stale docs, fake tech | imports in changed files that do not resolve in the venv | diff, venv |
+| 12 | Tech debt | not measured yet: needs longer chains of steps | — |
 
 The report also checks the first round's conclusions automatically: less code, better bloat score, explicit
 requirements not better, task tokens within ±15%, deploy 40-100k, and the LLM case won by lab-forge.

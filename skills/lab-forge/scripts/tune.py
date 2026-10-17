@@ -18,6 +18,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from guard import on_default_branch  # noqa: E402
+
 SECTION = "## Overrides"
 LOG_LINE = re.compile(r"^- (\S+ \S+) tune (global|repo) (\[.*\])$")
 
@@ -80,7 +83,6 @@ def apply(scope, repo, new, old):
 
 def resync():
     """Harness files that hold a copy of the global rules must follow overrides.md."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from install_global import state, sync
 
     if state()[1]:
@@ -124,10 +126,10 @@ def main():
         if not args.line or not args.scope:
             parser.error("add needs a line and --scope")
         scope, line, old = args.scope, args.line.strip(), args.replace and args.replace.strip()
-        if scope == "repo" and repo_level_zero(args.repo):
+        if scope == "repo" and (repo_level_zero(args.repo) or on_default_branch(args.repo)):
             tag = f"[{args.repo.resolve().name}] "
             scope, line, old = "global", tag + line, old and tag + old
-            print("level 0: nothing is written to the repo; stored in global overrides")
+            print("level 0 or default branch: nothing is written to the repo; stored in global overrides")
         apply(scope, args.repo, line, old)
     else:
         scope, (new, old) = last_tune(args.repo)
