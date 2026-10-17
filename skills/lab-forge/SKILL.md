@@ -23,8 +23,10 @@ are tune mode: surgical edits, never a rebuild.
    just done. Plans, specs, ADRs appear only for big or irreversible work.
 3. **Markdown diet.** Every generated file has a line budget
    (`references/generation.md`). Link, never repeat. No document "just in case".
-4. **One source of truth.** One canonical rules file; every other agent entry
-   point is a pointer of at most 5 lines. Two full rule files = drift = bug.
+4. **One source of truth.** How to work lives once per machine in
+   `~/.lab-forge/AGENTS.md`; the repo `AGENTS.md` holds only project facts.
+   Every other entry point is an import, a managed copy or a pointer of at
+   most 5 lines. Two hand-kept rule files = drift = bug.
 5. **Rules enforced by tools beat rules in prose** - but only at the level the
    user is allowed to touch (levels 0-3, `references/environment.md`).
 6. **Style from the pack, facts from the project.** Principles come from
@@ -53,6 +55,11 @@ are tune mode: surgical edits, never a rebuild.
 works on Windows). Read `references/environment.md` to interpret it: which agent
 and which folders it reads, OS, git host, network, and the ownership level (0-3)
 for each project. Confirm the level with the user; never assume write rights.
+If `~/.lab-forge/state.md` is missing, install the global layer once for the
+harnesses in use: `scripts/install_global.py install --harness <list>`
+(`references/generation.md` section 8). It writes only user-level files, so
+repo level 0 does not block it; skip the guard hook with `--no-hooks` if the
+user declines it.
 
 **Phase 1 - Onboarding audit.** Run `scripts/audit_repo.py <project>` for each
 project the user points at, then read `references/audit.md` and review by hand
@@ -73,7 +80,9 @@ and commands to create, bundled skills to install. Get explicit confirmation.
 **Phase 4 - Generate.** Follow `references/generation.md` and the templates in
 `assets/templates/`. Write the canonical file first, then pointers, skills,
 commands, then guards if the level allows. Adapt every template to the detected
-stack; delete sections that do not apply rather than leaving placeholders.
+stack; delete sections that do not apply rather than leaving placeholders. If
+Cursor or Copilot in VS Code is used, run `scripts/install_global.py repo <project>`:
+they have no global rules file.
 
 **Phase 5 - Install bundled skills.** Copy each folder from
 `style-pack/bundled-skills/` into the skills directory the agent reads (see
@@ -83,7 +92,8 @@ content. If a bundled skill needs network the machine lacks, keep it - these
 skills carry their own fallbacks.
 
 **Phase 6 - Verify and record.** Run the checks in `references/generation.md`
-(budgets, links resolve, no duplicated rules, triggers present). Do one dry run:
+(budgets, links resolve, no duplicated rules, triggers present), then
+`scripts/smoke.py` to prove each harness loads the rules. Do one dry run:
 pick a small real task, show how the new rules route it. Write `.lab-forge/state.md`
 from its template. Finish with a 5-line summary: what was created, where, how to
 tune.

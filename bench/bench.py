@@ -12,6 +12,7 @@ See bench/README.md for the protocol and the metric-to-pain map.
 """
 
 import argparse
+import ast
 import fnmatch
 import hashlib
 import json
@@ -43,12 +44,12 @@ AI_FILES = [
 ]
 DEPLOY = {
     "new": "Use the lab-forge skill ({skill}/SKILL.md) to set up my AI working environment for this NEW, currently "
-    "empty project. The project will be: {brief} Only Claude Code is used. Ownership level 1 (repo files only "
-    "— no hooks, no CI). I am not available: run in batch mode, every confirmation (skeleton etc.) is "
+    "empty project. The project will be: {brief} Only Claude Code is used. Ownership level 1 for the repo (no "
+    "repo hooks, no CI); user-level setup in HOME is allowed. I am not available: run in batch mode, every confirmation (skeleton etc.) is "
     "pre-approved, do not ask questions. Docs and commits in English.",
     "existing": "Use the lab-forge skill ({skill}/SKILL.md) to onboard this existing project: audit it and set up my "
-    "AI working environment for it. Only Claude Code is used. Ownership level 1 (repo files only — no "
-    "hooks, no CI changes). I am not available: run in batch mode, every confirmation (skeleton, fixes "
+    "AI working environment for it. Only Claude Code is used. Ownership level 1 for the repo (no repo "
+    "hooks, no CI changes); user-level setup in HOME is allowed. I am not available: run in batch mode, every confirmation (skeleton, fixes "
     "from the audit limited to AI-setup files) is pre-approved, do not ask questions. Do not change "
     "application code. Docs and commits in English.",
 }
@@ -73,7 +74,9 @@ Session start (do this exactly as Claude Code would): read HOME/.claude/CLAUDE.m
 exist and follow them (also any file they import, and subfolder CLAUDE.md files when you work in that subfolder). \
 Skills = HOME/.claude/skills/*/SKILL.md and PROJECT/.claude/skills/*/SKILL.md — read only their frontmatter now; \
 when a skill's description matches what you're doing, read its SKILL.md and follow it. Commands in \
-.claude/commands are equivalent to skills.
+.claude/commands are equivalent to skills. Hooks: if HOME/.claude/settings.json defines PreToolUse hooks, run each \
+matching hook command before the matching tool call (Edit/Write = any file change, Bash = any shell command), with \
+{{"tool_name", "tool_input", "cwd"}} JSON on stdin; exit code 2 blocks the call: do not make it, follow stderr.
 Isolation rules: work ONLY inside PROJECT and HOME{extra}. Python = PROJECT/.venv/bin/python (dependencies, pytest \
 and ruff installed; do not install packages). Do not read anything else on disk (no other run dirs, no real home \
 dir). Do NOT use the Skill tool or any skills except those in HOME/.claude/skills and PROJECT/.claude/skills. No \
@@ -128,6 +131,25 @@ def ruff_count(py, root, files):
         return len(json.loads(res.stdout))
     except ValueError:
         return 0
+
+
+def unresolved_imports(py, root, files):
+    """Top-level imports in changed files that do not resolve in the project venv: invented or stale tech."""
+    names = set()
+    for f in files:
+        try:
+            tree = ast.parse((root / f).read_text())
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                names.add(node.module.split(".")[0])
+    probe = "import importlib.util as u, sys; sys.path[:0] = ['.', 'src']; "
+    probe += "print(sum(u.find_spec(n) is None for n in sys.argv[1:]))"
+    res = sh([py, "-c", probe, *sorted(names)], cwd=root, check=False)
+    return int(res.stdout.strip() or 0)
 
 
 def ws_name(seed, case, arm, rep):
@@ -277,8 +299,15 @@ class Bench:
                 )
             py_files = [f for f in files if f.endswith(".py")]
             ruff_new = max(ruff_count(py, copy, py_files) - ruff_count(py, before, py_files), 0)
+            bad_imports = unresolved_imports(py, copy, [f for f in py_files if (copy / f).exists()])
         detail = hidden.stdout.strip().splitlines()[-1:] or [hidden.stderr.strip()[-200:]]
-        return {"solved": hidden.returncode == 0, "check": detail[0], "pytest": pytest, "ruff_errors": ruff_new}
+        return {
+            "solved": hidden.returncode == 0,
+            "check": detail[0],
+            "pytest": pytest,
+            "ruff_errors": ruff_new,
+            "bad_imports": bad_imports,
+        }
 
     def recheck(self):
         """Re-run checks on every recorded coding step, e.g. after fixing a case's check.py."""

@@ -69,11 +69,22 @@ def apply(scope, repo, new, old):
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(text) + "\n", encoding="utf-8")
     log(state, scope, new, old)
+    if scope == "global":
+        resync()
     print(target)
     if old:
         print(f"- {old}")
     if new:
         print(f"+ {new}")
+
+
+def resync():
+    """Harness files that hold a copy of the global rules must follow overrides.md."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from install_global import state, sync
+
+    if state()[1]:
+        sync()
 
 
 def log(state, scope, new, old):
