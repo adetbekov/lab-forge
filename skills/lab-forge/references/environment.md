@@ -26,11 +26,13 @@ On Windows `~` is `%USERPROFILE%`.
 
 ## 2. Choosing the canonical file
 
-- Several agents in use -> canonical `AGENTS.md`; `CLAUDE.md`,
-  `.github/copilot-instructions.md`, `.cursor/rules/main.mdc` become pointers.
-- Only Claude Code -> canonical `CLAUDE.md`.
+- Canonical repo file is `AGENTS.md`: Claude Code (through `CLAUDE.md` =
+  `@AGENTS.md`), Codex, Copilot, Cursor and Antigravity all read it.
+  `.github/copilot-instructions.md` becomes a pointer; Cursor needs no `.mdc`.
 - Only Copilot and it ignores `AGENTS.md` in this setup -> canonical
   `.github/copilot-instructions.md`.
+- User-level files per harness are written by `scripts/install_global.py`
+  (`generation.md` section 8), never by hand.
 - Skills folder: prefer the one every present agent reads (`.claude/skills/` is
   read by both Claude Code and Copilot). Never keep two copies of a skill.
 
@@ -64,10 +66,10 @@ guards?"), then degrade and note it in `.lab-forge/state.md`.
 Company builds of Copilot or Claude (for example through a cloud model gateway)
 may read only part of the folders above. Do not guess:
 
-1. Write a one-line test rule into the candidate always-on file (for example
-   "End every answer with the word FORGE-OK").
-2. Ask the user to send one message in each agent tab and report which ones
-   obeyed.
-3. Keep only the files that work, remove the test line.
+1. Run `scripts/smoke.py`. Harnesses with a CLI are checked automatically.
+2. For the rest, ask the user to send `lab-forge ping` in a new chat of each
+   agent; the reply must carry the global and the repo canary.
+3. A harness that misses the global canary gets the repo copy
+   (`install_global.py repo`); one that misses the repo canary gets a pointer.
 
 Record the result in `.lab-forge/state.md` so tune mode does not repeat it.

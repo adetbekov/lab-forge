@@ -6,7 +6,7 @@ description: Sizes any incoming task (S/M/L/XL), decomposes it into small checka
 # task-intake
 
 ## 1. Size
-Use the ladder in {{canonical_path}}. State the size in one line with the reason.
+Use the ladder in the global rules (`~/.lab-forge/AGENTS.md`, rule 2). State the size in one line with the reason.
 - S -> stop this skill, just do the task.
 - M -> steps 3-4 in chat, no file.
 - L/XL -> steps 2-5.

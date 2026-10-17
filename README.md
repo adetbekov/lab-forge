@@ -31,9 +31,12 @@ format (`SKILL.md` plus references and scripts).
 | Codex and other `AGENTS.md` agents | `.agents/skills/` |
 | Cursor | `.cursor/skills/` |
 
-Then ask the agent: "set up lab-forge for this project". An empty project gets
-seed mode: one short rules file and two skills; bundled skills go to your user
-skills folder once, not into each repo.
+Then ask the agent: "set up lab-forge for this project". On first use it installs the
+global layer once per machine (`scripts/install_global.py install`): working rules in
+`~/.lab-forge/`, a pointer in each agent's global file, and a hook that blocks edits on
+`main`. Each repo keeps only its facts in `AGENTS.md`; an empty project gets seed mode
+(that file plus two skills). Bundled skills go to your user skills folder once.
+`scripts/smoke.py` checks that every agent really loads the rules.
 
 ## How it works
 
@@ -49,8 +52,6 @@ and bundled skills. Swap it out and the engine serves someone else's style.
 
 ## Roadmap
 
-- Global layer installed once per machine, plus thin per-repo files
-- Adapters that actually work in Claude Code, Codex, Copilot, Cursor and Antigravity
 - Model routing: small tasks on a cheaper model, hard ones escalated after a failed check
 - Repeatable A/B benchmark across new, small and large projects
 

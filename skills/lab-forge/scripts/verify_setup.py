@@ -18,12 +18,14 @@ CANONICAL = ["AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md"]
 POINTERS_EXTRA = [".cursor/rules/main.mdc"]
 SKILL_DIRS = [".claude/skills", ".github/skills", ".agents/skills", ".cursor/skills"]
 COMMAND_GLOBS = [".github/prompts/*.prompt.md", ".claude/commands/*.md"]
-BUDGET = {"rules": 100, "pointer": 5, "skill": 120, "command": 10, "state": 60}
+BUDGET = {"rules": 60, "pointer": 5, "skill": 120, "command": 10, "state": 60}
 LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(?:#[^)]*)?\)")
+GLOBAL_COPY = re.compile(r"<!-- lab-forge:begin.*?<!-- lab-forge:end -->", re.S)
 
 
 def lines(path):
-    return path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    """Lines the repo owns: a managed copy of the global rules (install_global.py repo) is not counted."""
+    return GLOBAL_COPY.sub("", path.read_text(encoding="utf-8", errors="ignore")).splitlines()
 
 
 def body_lines(path):
