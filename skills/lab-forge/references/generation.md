@@ -30,7 +30,7 @@ for a DS/ML engineer:
 | Skill `wiki-page` | `skill-wiki-page.md` | if a wiki channel exists |
 | Commands `/intake /review /pr /wiki /deck` | `command.md` | if the agent supports commands |
 | Scoped rule for exploration vs production paths | inside `rules.md` or a scoped file | if notebooks exist |
-| Bundled skills from the style pack | copied as-is | yes |
+| Bundled skills from the style pack | copied as-is to the user skills folder | once per machine; into the repo only on request |
 | `.lab-forge/state.md` | `state.md` | yes |
 
 Anything else (ADR folder, changelog, status page, roadmap, onboarding doc) is
@@ -61,7 +61,19 @@ Over budget -> cut or move detail into a skill; never shrink by removing the
 - Every pain point from the interview becomes a concrete rule, phrased as what
   to do instead ("reuse helpers in `utils/io.py`; do not write new readers").
 - Commands to run (tests, lint, pipeline) are copied from the project's real
-  Makefile, pyproject, dvc.yaml or README. Never invent a command.
+  Makefile, pyproject, dvc.yaml or README, or from what the user stated. Never
+  invent a command, and never add a rule that breaks a stated one.
+- New project: prescribe no package layout. If you must, it has to let stated
+  commands run from the root with no install step (`pkg/` at the root, not
+  `src/pkg/`, unless an editable install is part of setup).
+- Config format: only what the env reads today (`detect_env.py` reports the
+  importable parsers). TOML via `tomllib` on 3.11+, else JSON; YAML only with
+  PyYAML installed. The file extension matches the content.
+- Run artifacts: the rules name one committed baseline file and one git-ignored
+  runs folder, and the generated `.gitignore` entry exists.
+- AI co-author trailer: copy the policy the harness or environment imposes
+  (system prompt, existing commit trailers, CONTRIBUTING). None found -> the
+  style pack default. Record it in `.lab-forge/state.md`; tune changes it.
 
 ## 4. Writing skills
 

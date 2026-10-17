@@ -14,7 +14,8 @@ Copied from the project, never invented.
 
 ## Map
 - Production code: {{production_path}}. Exploration: {{exploration_path}}; production has no notebook cells.
-- Parameters: {{params_file}}, not code. Metrics vs baseline: {{metrics_location}}.
+- Parameters: {{params_file}}, not code, in a format the env already reads (TOML via `tomllib`,
+  JSON; YAML only if PyYAML is installed). Metrics vs baseline: {{metrics_location}}.
 - Follow these patterns: {{pattern_examples_with_paths}}. Logging: {{logger}}, not print.
 
 ## Invariants
@@ -28,10 +29,15 @@ Breaking one is a bug, not a style comment.
 
 ## Done means
 `{{test_command}}` and `{{lint_command}}` pass, a DS change has its metric vs
-baseline, and skill `self-review` ran on the diff.
+baseline in {{metrics_location}} (commit the baseline only; per-run outputs go to a
+git-ignored folder), and skill `self-review` ran on the diff.
 
 ## Languages
 Identifiers: {{lang_code}}. Comments and docstrings: {{lang_comments}}. Commits: {{lang_commits}}.
+
+## Delivery
+AI co-author trailer: {{coauthor_policy}}; a policy set by the harness or environment wins.
+PR: skill `pr-description`. Wiki: skill `wiki-page`. Slides: skill `star-deck`.
 
 ## Skills - use them when the context matches
 | Skill | When |

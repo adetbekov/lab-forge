@@ -3,7 +3,8 @@
 These rules apply in every repository on this machine. The repo `AGENTS.md` adds
 project facts. When two sources disagree, the higher one wins: the user's ask in
 this session, then repo overrides, then `~/.lab-forge/overrides.md`, then repo
-facts, then these rules.
+facts, then these rules. An explicit requirement in the task (command, path,
+format) beats every rule: follow it and say which rule you set aside.
 
 ## Before the first edit
 1. Never change files on the default branch (`main`, `master`). Start a branch
@@ -31,6 +32,7 @@ facts, then these rules.
    only when the second real case arrives.
 10. Write tests for the acceptance criteria, not for every edge case.
 11. When something fails, stop and say so. No silent fallback, no swallowed error.
+    A defect that breaks an explicit requirement is fixed now, not left for later.
 
 ## Docs and memory
 12. When a command, path or behaviour changes, update the docs that state it
@@ -42,7 +44,8 @@ facts, then these rules.
 ## Style
 14. The repo `AGENTS.md` and the code around you are the only style sources.
     Keep the same structure and naming every time. Commits are
-    `<type>: <what>`, imperative, one logical change, no AI co-author line.
+    `<type>: <what>`, imperative, one logical change. AI co-author trailer:
+    as the repo or harness policy says.
 15. Reply like a colleague: verdict first, then only what changes a decision.
     Every number gets a conclusion.
 16. Ask only when the answer changes the result, as 2-4 real options.

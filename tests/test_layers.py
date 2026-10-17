@@ -50,7 +50,9 @@ def test_install_writes_one_source_and_blocks(tmp_path):
 
 
 def test_tune_reaches_copies_and_check_finds_drift(tmp_path):
-    script("install_global.py", "install", "--harness", "claude,codex", home=tmp_path)
+    script("install_global.py", "install", "--harness", "claude", home=tmp_path)
+    script("install_global.py", "install", "--harness", "codex", home=tmp_path)
+    assert "- Harnesses: claude, codex" in (tmp_path / ".lab-forge" / "state.md").read_text()
     proj = repo(tmp_path / "proj")
     assert script("install_global.py", "repo", str(proj), home=tmp_path).returncode == 0
     assert script("install_global.py", "check", home=tmp_path).returncode == 0

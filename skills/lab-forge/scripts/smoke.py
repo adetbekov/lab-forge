@@ -44,7 +44,8 @@ def make_repo(root, repo_canary, harness):
     git(repo, "init", "-q", "-b", "main")
     (repo / "AGENTS.md").write_text(f"# Smoke repo\n\nlab-forge-canary: {repo_canary}\n", encoding="utf-8")
     (repo / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
-    if harness in ("cursor", "copilot"):  # no global file in the IDE: repo copy is the fallback
+    ide_only = harness == "cursor" or (harness == "copilot" and not shutil.which(CLI["copilot"][0]))
+    if ide_only:  # Cursor and Copilot in VS Code have no global file: the repo copy is the fallback
         with (repo / "AGENTS.md").open("a", encoding="utf-8") as f:
             f.write("\n" + block("repo"))
     git(repo, "add", "-A")

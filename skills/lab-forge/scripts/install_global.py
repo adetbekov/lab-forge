@@ -140,8 +140,9 @@ def put_engine(skills_dir):
 
 
 def install(harnesses, hooks):
-    lf, (_, canary, _, repos) = lf_home(), state()
+    lf, (_, canary, installed, repos) = lf_home(), state()
     canary = canary or f"LF-{secrets.token_hex(4)}"
+    harnesses = list(dict.fromkeys([*installed, *harnesses]))  # a partial rerun keeps the others
     (lf / "hooks").mkdir(parents=True, exist_ok=True)
     rules = read(ENGINE / "assets" / "templates" / "global-agents.md").replace("{{canary}}", canary)
     (lf / "AGENTS.md").write_text(rules, encoding="utf-8")

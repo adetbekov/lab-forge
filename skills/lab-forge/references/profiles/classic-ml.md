@@ -24,7 +24,7 @@ only with a metric delta on the same validation setup.
 - Target and features computed for the same period and population.
 - No information from after the prediction date in features (leakage check).
 - Split and seeds from config; the same split for every compared model.
-- Data and model files are not committed to git.
+- Data, model files and per-run metrics are not committed; only the baseline metrics file is.
 
 ## Domain slop to forbid in rules
 - Changing the split or the metric while comparing models.

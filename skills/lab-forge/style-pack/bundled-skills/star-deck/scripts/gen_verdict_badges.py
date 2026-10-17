@@ -2,7 +2,9 @@
 """Verdict badges (offline replacement for Apple emoji PNGs, network down):
 green check circle / red cross circle, drawn with PIL, 128px, transparent bg.
 """
+
 import pathlib
+
 from PIL import Image, ImageDraw
 
 HERE = pathlib.Path(__file__).parent

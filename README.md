@@ -7,9 +7,10 @@ You run it once. It reads your machine and your repos, asks only what it could
 not detect, and writes a small set of rules, skills and commands that make the
 agent work the way you do. Later runs only tune what is already there.
 
-Status: **v0.1, experimental.** The first A/B round against a plain agent showed
-about 30% less code and less bloat, at the cost of missing some explicit
-requirements. Fixes are in progress (see Roadmap).
+Status: **v0.2, experimental.** On the [bench](bench/README.md) it matches a plain
+agent on explicit requirements (16/16 hidden checks), writes 56% less code and
+wins the blind review 28.4 vs 25.0 of 30
+([report](bench/results/2026-10-18-v0.2-vs-bare/report.md)).
 
 ## What it fixes
 
@@ -33,8 +34,9 @@ format (`SKILL.md` plus references and scripts).
 Then ask the agent: "set up lab-forge for this project". On first use it installs the
 global layer once per machine (`scripts/install_global.py install`): working rules in
 `~/.lab-forge/`, a pointer in each agent's global file, and a hook that blocks edits on
-`main`. Each repo keeps only its facts in `AGENTS.md`. `scripts/smoke.py` checks that every
-agent really loads the rules.
+`main`. Each repo keeps only its facts in `AGENTS.md`; an empty project gets seed mode
+(that file plus two skills). Bundled skills go to your user skills folder once.
+`scripts/smoke.py` checks that every agent really loads the rules.
 
 ## How it works
 

@@ -17,15 +17,17 @@ Fallback protocol (see SKILL.md — ask FIRST, degrade after):
 Pass --no-ask to run the full chain non-interactively (batch mode); by default
 the script exits with code 42 after CDN failure so the caller can ask the user.
 """
+
+import pathlib
 import subprocess
 import sys
-import pathlib
 import urllib.parse
 import urllib.request
 
 
-def fetch(emoji: str, out_dir: pathlib.Path, size: int = 160,
-          no_ask: bool = False) -> pathlib.Path:
+def fetch(
+    emoji: str, out_dir: pathlib.Path, size: int = 160, no_ask: bool = False
+) -> pathlib.Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     codepoints = "-".join(f"{ord(c):x}" for c in emoji if ord(c) != 0xFE0F)
     out = out_dir / f"emoji_{codepoints}.png"
@@ -46,17 +48,23 @@ def fetch(emoji: str, out_dir: pathlib.Path, size: int = 160,
         except Exception as e:  # noqa: BLE001
             last_err = f"{url}: {e}"
     if not no_ask:
-        print(f"CDN unreachable ({last_err}).\n"
-              "ASK THE USER: enable network access and retry, or approve the "
-              "offline npm fallback? Re-run with --no-ask to proceed offline.",
-              file=sys.stderr)
+        print(
+            f"CDN unreachable ({last_err}).\n"
+            "ASK THE USER: enable network access and retry, or approve the "
+            "offline npm fallback? Re-run with --no-ask to proceed offline.",
+            file=sys.stderr,
+        )
         raise SystemExit(42)
     # Fallback (approved/batch): npm emoji-datasource-apple
     try:
         pkg = pathlib.Path("node_modules/emoji-datasource-apple")
         if not pkg.exists():
-            subprocess.run(["npm", "install", "--no-save", "emoji-datasource-apple"],
-                           check=True, capture_output=True, timeout=120)
+            subprocess.run(
+                ["npm", "install", "--no-save", "emoji-datasource-apple"],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
         # dataset names files with fully-qualified codepoints (incl. fe0f sometimes)
         for name in (codepoints, "-".join(f"{ord(c):x}" for c in emoji)):
             src = pkg / "img" / "apple" / "64" / f"{name}.png"
@@ -82,8 +90,11 @@ if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if a != "--no-ask"]
     no_ask = "--no-ask" in sys.argv
     emojis = [e.strip() for e in args[0].split(",") if e.strip()]
-    out_dir = pathlib.Path(args[1]) if len(args) > 1 and not args[1].startswith("--") \
+    out_dir = (
+        pathlib.Path(args[1])
+        if len(args) > 1 and not args[1].startswith("--")
         else pathlib.Path("assets/emoji")
+    )
     size = 160
     if "--size" in args:
         size = int(args[args.index("--size") + 1])
