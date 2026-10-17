@@ -6,6 +6,7 @@ Written by lab-forge. Tune mode reads this to know what it owns.
 - Agents confirmed working: {{agents_and_files_that_obeyed}}
 - Level: {{level_per_project}}
 - Domain profile: {{profiles}}
+- Mode: {{seed_or_deploy}}. AI co-author trailer: {{coauthor_policy}} (source: {{env_or_default}})
 
 ## Files owned by lab-forge
 | Path | Kind | Budget |

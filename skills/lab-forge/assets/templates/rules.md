@@ -1,6 +1,7 @@
 # Rules for AI agents - {{project_name}}
 
 Canonical rules for every agent in this repo. Other agent files point here.
+An explicit requirement in the task (command, path, format, status code) beats every rule below; on conflict follow the task and say which rule you set aside.
 
 ## Read first
 - {{status_or_readme}} - what really exists in the code
@@ -22,16 +23,16 @@ Unsure between two sizes: ask one question, do not pick the bigger one.
 1. Smallest diff that solves the task. No drive-by refactors or reformatting.
 2. Follow existing patterns: {{pattern_examples_with_paths}}.
 3. Base abstraction + thin implementations when there are 2+ cases; one case -> write it directly.
-4. Parameters live in {{params_file}}, not in code.
+4. Parameters live in {{params_file}}, not in code. Its format is one the env can already read (TOML via `tomllib`, JSON; YAML only if PyYAML is installed).
 5. Exploration in {{exploration_path}}; production code in {{production_path}} has no notebook cells.
 6. No swallowed exceptions, no silent fallbacks, no sleeps to hide timing problems.
 7. No new dependencies without asking. Logging via {{logger}}, not print.
 8. {{pain_point_rule}}
-9. Something does not work -> stop and say it. No quiet workaround.
+9. Something does not work -> say it, no quiet workaround. A defect that breaks an explicit requirement is fixed now, not reported for later - even when the user is away.
 
 ## Check before saying "done"
 - Run: {{test_command}}, {{lint_command}}
-- For DS changes: metric vs baseline in {{metrics_location}}.
+- For DS changes: metric vs baseline in {{metrics_location}}. Commit the baseline only; per-run outputs go to a git-ignored folder.
 - Run skill `self-review` on your diff.
 
 ## Talking to the user
@@ -47,7 +48,7 @@ Unsure between two sizes: ask one question, do not pick the bigger one.
 Identifiers: {{lang_code}}. Comments and docstrings: {{lang_comments}}. Commits: {{lang_commits}}.
 
 ## Delivery
-Commits: one logical change, small, no AI co-author lines, no emoji.
+Commits: one logical change, small, no emoji. AI co-author trailer: {{coauthor_policy}}; a policy set by the harness or environment wins.
 PR: skill `pr-description`. Wiki: skill `wiki-page`. Slides: skill `star-deck`.
 
 ## Skills - use them when the context matches

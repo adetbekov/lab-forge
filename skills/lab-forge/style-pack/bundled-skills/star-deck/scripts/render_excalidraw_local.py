@@ -7,10 +7,11 @@ solid/dashed/dotted strokes, fills, opacity.
 
 Usage: python3 render_local.py diagram.excalidraw [out.png]
 """
+
 import json
 import math
-import sys
 import pathlib
+import sys
 
 import cairosvg
 
@@ -40,8 +41,10 @@ def render(path, out_png=None, scale=2.0):
     y1 = max(el_bbox(e)[3] for e in els) + 12
     w, h = x1 - x0, y1 - y0
     parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h:.0f}" '
-        f'viewBox="{x0:.0f} {y0:.0f} {w:.0f} {h:.0f}">'
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h:.0f}" '
+            f'viewBox="{x0:.0f} {y0:.0f} {w:.0f} {h:.0f}">'
+        )
     ]
     for el in els:
         op = el.get("opacity", 100) / 100.0
@@ -64,8 +67,10 @@ def render(path, out_png=None, scale=2.0):
             fill = "none" if fill == "transparent" else fill
             cx, cy = el["x"] + el["width"] / 2, el["y"] + el["height"] / 2
             parts.append(
-                f'<ellipse cx="{cx}" cy="{cy}" rx="{el["width"]/2}" ry="{el["height"]/2}" '
-                f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"{d_attr} opacity="{op}"/>'
+                f'<ellipse cx="{cx}" cy="{cy}" '
+                f'rx="{el["width"] / 2}" ry="{el["height"] / 2}" '
+                f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"{d_attr} '
+                f'opacity="{op}"/>'
             )
         elif t == "text":
             fs = el.get("fontSize", 16)
@@ -102,9 +107,9 @@ def render(path, out_png=None, scale=2.0):
                     ex = bx + size * math.cos(ang + da)
                     ey = by + size * math.sin(ang + da)
                     parts.append(
-                        f'<path d="M {bx:.1f} {by:.1f} L {ex:.1f} {ey:.1f}" fill="none" '
-                        f'stroke="{stroke}" stroke-width="{sw}" opacity="{op}" '
-                        f'stroke-linecap="round"/>'
+                        f'<path d="M {bx:.1f} {by:.1f} L {ex:.1f} {ey:.1f}" '
+                        f'fill="none" stroke="{stroke}" stroke-width="{sw}" '
+                        f'opacity="{op}" stroke-linecap="round"/>'
                     )
     parts.append("</svg>")
     svg = "".join(parts)

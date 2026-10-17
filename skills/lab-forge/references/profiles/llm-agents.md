@@ -23,7 +23,8 @@ and measured on its own.
 
 ## Done means
 - the unit has a clear contract (inputs, outputs, errors);
-- eval run recorded with the delta against the previous run;
+- eval run reported with the delta against the committed baseline; per-run
+  outputs stay git-ignored, the baseline is updated only on promotion;
 - failures on the golden set are either fixed or listed with a reason.
 
 ## Invariants worth proposing
