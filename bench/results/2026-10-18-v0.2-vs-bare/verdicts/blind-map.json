@@ -1,0 +1,34 @@
+{
+ "churn-r1": {
+  "X": "v02",
+  "Y": "bare"
+ },
+ "churn-r2": {
+  "X": "v02",
+  "Y": "bare"
+ },
+ "encoders-r1": {
+  "X": "bare",
+  "Y": "v02"
+ },
+ "encoders-r2": {
+  "X": "bare",
+  "Y": "v02"
+ },
+ "optuna-r1": {
+  "X": "bare",
+  "Y": "v02"
+ },
+ "optuna-r2": {
+  "X": "v02",
+  "Y": "bare"
+ },
+ "rparse-r1": {
+  "X": "bare",
+  "Y": "v02"
+ },
+ "rparse-r2": {
+  "X": "v02",
+  "Y": "bare"
+ }
+}
