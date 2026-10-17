@@ -16,32 +16,43 @@ are tune mode: surgical edits, never a rebuild.
 
 ## Fixed principles
 
-1. **Detect before asking.** Every question the filesystem can answer is not asked.
+1. **The user's explicit request wins.** A command, path, format or behaviour the
+   user named beats every generated rule and every style-pack default. Never
+   generate a rule that a stated requirement would contradict (a layout that
+   breaks the stated run command, a config format the env cannot read).
+2. **Detect before asking.** Every question the filesystem can answer is not asked.
    Ask only when the answer changes the result, as a real choice of 2-4 options
    (`references/interview.md`). Otherwise decide and state the assumption.
-2. **Ceremony scales with the task.** Generated rules must let a small task be
+3. **Ceremony scales with the task.** Generated rules must let a small task be
    just done. Plans, specs, ADRs appear only for big or irreversible work.
-3. **Markdown diet.** Every generated file has a line budget
+4. **Markdown diet.** Every generated file has a line budget
    (`references/generation.md`). Link, never repeat. No document "just in case".
-4. **One source of truth.** One canonical rules file; every other agent entry
+5. **One source of truth.** One canonical rules file; every other agent entry
    point is a pointer of at most 5 lines. Two full rule files = drift = bug.
-5. **Rules enforced by tools beat rules in prose** - but only at the level the
+6. **Rules enforced by tools beat rules in prose** - but only at the level the
    user is allowed to touch (levels 0-3, `references/environment.md`).
-6. **Style from the pack, facts from the project.** Principles come from
+7. **Style from the pack, facts from the project.** Principles come from
    `style-pack/principles.md`; tools, commands, domain come from what is detected.
    Never import code or structure from the pack's origin projects.
-7. **Skeleton before content.** Show the file list and the rules outline, get a
+8. **Skeleton before content.** Show the file list and the rules outline, get a
    yes, then write. After approval, edits are surgical.
-8. **Ask first, degrade after.** Missing network, permissions or tools: stop and
-   ask once, then use the fallback and say what was skipped.
-9. **Bundled skills are installed as-is.** Copy the folder, restore the
-   `SKILL.md` name, never rewrite the content.
-10. **Leave a trail.** Record what was deployed in `.lab-forge/state.md` so tune mode
+9. **Ask first, degrade after.** Missing network, permissions or tools: stop and
+   ask once, then use the fallback and say what was skipped. In batch mode (no
+   user) there is no "ask": decide, do it, report the assumption. An explicit
+   requirement is never deferred.
+10. **Bundled skills are installed as-is, once, at user level.** They go to the
+    user skills folder shared by all repos, never into a repo unless asked.
+11. **Leave a trail.** Record what was deployed in `.lab-forge/state.md` so tune mode
     knows what it owns and what the user wrote by hand.
 
 ## Modes
 
-- **Deploy** - no `.lab-forge/state.md` found. Run phases 0-6.
+- **Seed** - the project is empty or has no code yet. Phase 0, then write only the canonical
+  rules file (at most 40 lines: invariants, task ladder, anti-slop, talking,
+  delivery) and the skills `self-review` and `grill`. No audit, no layout, no
+  params file, no profile invariants about paths, no bundles: the first real
+  task decides structure. Then phase 6. Upgrade to deploy later on request.
+- **Deploy** - no `.lab-forge/state.md` found and the project has code. Run phases 0-6.
 - **Tune** - state file exists, the user asks to change the setup, or a phrase
   sets lasting behaviour ("always", "fewer tests", "пиши короче"). Read
   `references/tune.md`, apply without asking, and skip the rest.
@@ -75,16 +86,19 @@ and commands to create, bundled skills to install. Get explicit confirmation.
 commands, then guards if the level allows. Adapt every template to the detected
 stack; delete sections that do not apply rather than leaving placeholders.
 
-**Phase 5 - Install bundled skills.** Copy each folder from
-`style-pack/bundled-skills/` into the skills directory the agent reads (see
-`references/environment.md`) and rename `SKILL.md.bundle` back to `SKILL.md`
-(the suffix only keeps them from loading as part of lab-forge). Do not edit
-content. If a bundled skill needs network the machine lacks, keep it - these
-skills carry their own fallbacks.
+**Phase 5 - Install bundled skills.** Skip if the user skills folder
+(`references/environment.md` section 1, for example `~/.claude/skills/`) already
+has them: they are installed once per machine. Otherwise copy each folder from
+`style-pack/bundled-skills/` there and rename `SKILL.md.bundle` back to
+`SKILL.md` (the suffix only keeps them from loading as part of lab-forge). Do
+not edit content. Into a repo only when the user asks.
 
 **Phase 6 - Verify and record.** Run the checks in `references/generation.md`
-(budgets, links resolve, no duplicated rules, triggers present). Do one dry run:
-pick a small real task, show how the new rules route it. Write `.lab-forge/state.md`
+(budgets, links resolve, no duplicated rules, triggers present). Dry run: run every command the user stated (entry point, tests, lint)
+from the project root exactly as written - no install step, no `PYTHONPATH`.
+A failure is a setup bug: fix the rules, not the command. No code yet (seed):
+put those commands into the rules as invariants ("must run from the root as
+written"). Write `.lab-forge/state.md`
 from its template. Finish with a 5-line summary: what was created, where, how to
 tune.
 

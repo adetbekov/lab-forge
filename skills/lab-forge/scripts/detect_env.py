@@ -90,6 +90,32 @@ def git_remote(repo):
     return url.split("/")[0].split(":")[0]
 
 
+def config_parsers(project):
+    """Config parsers importable by the project's own Python (.venv if present)."""
+    venv = [project / ".venv" / "bin" / "python", project / ".venv" / "Scripts" / "python.exe"]
+    python = next((str(p) for p in venv if p.exists()), sys.executable)
+    found = ["json"]
+    for module, fmt in (("tomllib", "toml"), ("yaml", "yaml")):
+        try:
+            ok = subprocess.run([python, "-c", f"import {module}"], capture_output=True,
+                                timeout=20).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        found += [fmt] if ok else []
+    return found
+
+
+def coauthor_trailers(project):
+    """Commits among the last 50 that carry a Co-Authored-By trailer: (with, total)."""
+    try:
+        out = subprocess.run(["git", "-C", str(project), "log", "-50", "--format=%B%x00"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    msgs = [m for m in out.split("\0") if m.strip()]
+    return sum("co-authored-by:" in m.lower() for m in msgs), len(msgs)
+
+
 def count_files(project, suffix):
     total = 0
     for dirpath, dirnames, filenames in os.walk(project):
@@ -132,6 +158,8 @@ def describe_project(project):
         "py_files": count_files(project, ".py"),
         "notebooks": count_files(project, ".ipynb"),
         "md_files": count_files(project, ".md"),
+        "config_parsers": config_parsers(project),
+        "coauthor_trailers": coauthor_trailers(project) if (project / ".git").exists() else None,
     }
 
 
@@ -173,7 +201,11 @@ def main():
               f"codeowners={p['codeowners']}")
         print(f"  agent files: {', '.join(p['agent_files']) or 'none'}")
         print(f"  stack: {', '.join(p['stack_files']) or '-'}")
-        print(f"  files: py={p['py_files']} ipynb={p['notebooks']} md={p['md_files']}")
+        print(f"  files: py={p['py_files']} ipynb={p['notebooks']} md={p['md_files']}"
+              f"{' -> seed mode' if not p['py_files'] and not p['notebooks'] else ''}")
+        trailers = "{}/{}".format(*p["coauthor_trailers"]) if p["coauthor_trailers"] else "-"
+        print(f"  config parsers: {', '.join(p['config_parsers'])} | "
+              f"commits with co-author trailer: {trailers}")
 
 
 if __name__ == "__main__":

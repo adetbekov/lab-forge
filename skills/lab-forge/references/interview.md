@@ -39,7 +39,8 @@ Never ask for permission to follow your own recommendation.
 4. **Stack facts not in files**: where data lives, how jobs run, tracker, deploy.
 5. **Restrictions**: network, what may not leave the machine, forbidden tools,
    approvals. These become invariants.
-6. **Delivery**: PR platform, wiki and whether the agent can reach it, slides.
+6. **Delivery**: PR platform, wiki and whether the agent can reach it, slides,
+   AI co-author trailer (detect first, see `generation.md` section 3).
 7. **Languages**: identifiers, comments, commits, docs.
 8. **Pain points**: what annoys the user most. Each becomes one concrete rule.
 

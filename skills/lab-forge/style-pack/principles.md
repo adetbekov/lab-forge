@@ -33,6 +33,7 @@ target project already uses.
 - Exploration lives in notebooks or scratch scripts (text format such as
   jupytext percent, so it diffs). Production code never contains cells.
 - Promotion to production needs a measurement that proves the gain.
+- Git keeps the baseline result only; per-run outputs live in a git-ignored folder.
 - The result of DS work is a number against a baseline ("72% -> 85%", "2d ->
   0.5d"), not "shipped a feature". No baseline -> first task is to get one.
 - Work behind a stable interface: change the implementation, keep the signature,
@@ -60,7 +61,8 @@ When unsure between two sizes, ask one question instead of choosing the bigger o
 - No comments that restate the code. Docstrings explain why and contracts.
 - No `print` with emoji in production code; use the project's logger.
 - Explicit names over short ones (`build_features(month)` not `proc(d)`).
-- If something does not work: stop and say so. No quiet workaround.
+- If something does not work: say so. No quiet workaround. If it breaks an
+  explicit requirement, fix it now; "tell me if you want this fixed" is not done.
 
 ## 6. Markdown diet
 
@@ -89,4 +91,5 @@ When unsure between two sizes, ask one question instead of choosing the bigger o
 - Wiki page (Confluence or similar): written for the reader who was not in the
   room; results with baseline first, details after.
 - Presentation: use the bundled `star-deck` skill.
-- Commit: one logical change, small. No AI co-author lines, no emoji.
+- Commit: one logical change, small, no emoji. AI co-author lines follow the
+  environment's policy; with none, the author's default is no trailer.
