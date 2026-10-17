@@ -62,7 +62,11 @@ def run(harness, prompt, repo, timeout):
             text=True,
             timeout=timeout,
             check=False,
-            env={k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_CODE_")},
+            env={
+                k: v
+                for k, v in os.environ.items()
+                if not k.startswith("CLAUDE_CODE_") or k == "CLAUDE_CODE_OAUTH_TOKEN"
+            },
         )
     except subprocess.TimeoutExpired:
         return None, "timeout"

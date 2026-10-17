@@ -146,8 +146,9 @@ win.
 
 ## Open items
 
-- Smoke (`scripts/smoke.py`), 2026-10-18: Gemini CLI loads `~/.gemini/GEMINI.md` ✓ and
-  repo `AGENTS.md` only with `context.fileName` (now set by the installer). Claude Code,
-  Codex, Copilot, Cursor and Antigravity IDE still need a run on a logged-in machine.
+- Smoke (`scripts/smoke.py`), 2026-10-18: Claude Code ✓ (global and repo rules, guard hook
+  blocks a commit on `main` even when asked). Gemini CLI loads `~/.gemini/GEMINI.md` ✓ and
+  repo `AGENTS.md` only with `context.fileName` (set by the installer). Codex, Copilot,
+  Cursor and Antigravity IDE still need a run on a logged-in machine.
 - Model Routing Playbook (@donimas) not found. C8 rests on Claude and Codex docs
   and superpowers SDD.

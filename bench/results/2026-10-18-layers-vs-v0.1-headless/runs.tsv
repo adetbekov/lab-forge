@@ -1,0 +1,21 @@
+ws	case	arm	rep	step	tokens	tools	ms	cost_usd	solved	check	pytest	ruff_errors	bad_imports	loc_py	loc_all	ai_loc	tests_added	max_new_file	out_of_scope	committed	on_main	questions	reply_words	russian
+churn-2555d0	churn	a	1	P0	705674	15	123654	0.832	—	—	—	—	—	0	6	1072	0	0	0	True	False	0	483	—
+churn-2555d0	churn	a	1	P1	439798	11	128129	0.604	True	ok	True	0	0	204	239	5	3	71	0	True	False	0	504	—
+churn-2555d0	churn	a	1	P2	392955	10	138241	0.507	True	ok	True	0	0	92	113	2	2	9	0	True	False	0	460	—
+churn-2555d0	churn	a	1	T	127610	5	18019	0.212	—	—	—	—	—	0	0	2	0	0	0	False	False	0	67	—
+churn-2555d0	churn	a	1	P3	93557	3	20927	0.208	—	—	—	—	—	0	0	0	0	0	0	False	False	0	318	True
+churn-a2a6bf	churn	a	2	P0	1029283	27	164682	0.964	—	—	—	—	—	0	6	1094	0	0	0	True	False	0	435	—
+churn-a2a6bf	churn	a	2	P1	840406	17	222770	0.967	True	ok	True	0	0	365	926	10	7	98	0	True	False	0	572	—
+churn-a2a6bf	churn	a	2	P2	721069	14	193289	0.816	True	ok	True	0	0	117	178	3	2	0	0	True	False	0	522	—
+churn-a2a6bf	churn	a	2	T	127981	5	12403	0.213	—	—	—	—	—	0	0	2	0	0	0	False	False	0	87	—
+churn-a2a6bf	churn	a	2	P3	97378	3	22361	0.233	—	—	—	—	—	0	0	0	0	0	0	False	False	0	299	True
+churn-ae8c3c	churn	b	1	P0	663200	15	170277	0.869	—	—	—	—	—	0	8	284	0	0	0	True	True	0	437	—
+churn-ae8c3c	churn	b	1	P1	331582	9	99646	0.485	False	no JSON with two ROC-AUC values in (0.5, 1] written by the run	True	0	0	283	338	0	5	85	0	True	True	0	510	—
+churn-ae8c3c	churn	b	1	P2	465258	11	123633	0.599	False	no JSON with two ROC-AUC values in (0.5, 1] written by the run	True	0	0	81	111	0	1	0	0	True	True	0	490	—
+churn-ae8c3c	churn	b	1	T	124992	5	14470	0.208	—	—	—	—	—	0	0	2	0	0	0	False	False	0	64	—
+churn-ae8c3c	churn	b	1	P3	94118	3	25687	0.217	—	—	—	—	—	0	0	0	0	0	0	False	False	0	271	True
+churn-f60f01	churn	b	2	P0	609240	14	126590	0.797	—	—	—	—	—	0	0	257	0	0	0	True	True	0	362	—
+churn-f60f01	churn	b	2	P1	321563	9	112702	0.479	True	ok	True	0	0	210	265	0	2	100	0	True	True	0	474	—
+churn-f60f01	churn	b	2	P2	301551	8	87571	0.450	True	ok	True	0	0	100	127	0	1	0	0	True	True	0	464	—
+churn-f60f01	churn	b	2	T	123813	5	11908	0.204	—	—	—	—	—	0	0	2	0	0	0	False	False	0	77	—
+churn-f60f01	churn	b	2	P3	94832	3	17432	0.213	—	—	—	—	—	0	0	0	0	0	0	False	False	0	264	True
