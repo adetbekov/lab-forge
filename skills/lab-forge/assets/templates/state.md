@@ -7,6 +7,7 @@ Written by lab-forge. Tune mode reads this to know what it owns.
 - Level: {{level_per_project}}
 - Domain profile: {{profiles}}
 - Mode: {{seed_or_deploy}}. AI co-author trailer: {{coauthor_policy}} (source: {{env_or_default}})
+- Test: `{{test_command}}`
 
 ## Files owned by lab-forge
 | Path | Kind | Budget |

@@ -1,0 +1,18 @@
+{
+ "optuna-r1": {
+  "X": "fixed",
+  "Y": "routed"
+ },
+ "encoders-r1": {
+  "X": "routed",
+  "Y": "fixed"
+ },
+ "rparse-r1": {
+  "X": "routed",
+  "Y": "fixed"
+ },
+ "churn-r1": {
+  "X": "routed",
+  "Y": "fixed"
+ }
+}

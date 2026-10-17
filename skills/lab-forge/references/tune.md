@@ -54,3 +54,12 @@ Fix the first cause found:
 ## Drift check
 When the user asks "is my setup still fine", compare state with disk. Report
 hand edits (they win), budgets over the limit, broken links, and dead skills.
+
+## Model routing (opt-in, experimental)
+"route models", "включи роутинг": `python scripts/tune.py routing on [--hook]`, and
+`routing off` to undo. It installs skill `triage` and the subagents `quick`, `build`,
+`deep` and `verifier` for Claude Code (`~/.claude/agents`) and Codex (`~/.codex/agents`,
+effort only), and adds one override line. `--hook` also adds the Stop hook that runs the
+tests of the changed code, at level 2 or higher only. The main session keeps the user's
+model. The bench run lost to "all on Opus" (`bench/routing/results.md`), so never turn it
+on unasked.

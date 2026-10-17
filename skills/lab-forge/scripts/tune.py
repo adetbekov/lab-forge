@@ -8,12 +8,14 @@ go to global overrides with a `[<repo name>]` prefix.
 Usage:
     python tune.py add --scope global|repo "<line>" [--replace "<old line>"] [--repo DIR]
     python tune.py undo [--repo DIR]      # a second undo redoes
+    python tune.py routing on|off [--hook]  # triage + quick/build/deep/verifier subagents
 """
 
 import argparse
 import json
 import os
 import re
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from guard import on_default_branch  # noqa: E402
 
 SECTION = "## Overrides"
+ROUTING = Path(__file__).resolve().parent.parent / "assets" / "routing"
+ROUTING_LINE = "Start every task with skill `triage`: it picks quick/build/deep and has verifier check the result."
 LOG_LINE = re.compile(r"^- (\S+ \S+) tune (global|repo) (\[.*\])$")
 
 
@@ -114,13 +118,79 @@ def last_tune(repo):
     return scope, json.loads(pair)
 
 
+def codex_agent(md):
+    """Codex reads ~/.codex/agents/*.toml. Effort carries over; the model stays the Codex default."""
+    head, body = md.split("---", 2)[1:]
+    meta = dict(line.split(": ", 1) for line in head.strip().splitlines())
+    lines = [f'name = "{meta["name"]}"', f"description = {json.dumps(meta['description'])}"]
+    lines += [f'model_reasoning_effort = "{meta["effort"]}"']
+    lines += ['sandbox_mode = "read-only"'] if meta["name"] == "verifier" else []
+    return "\n".join(lines + [f'developer_instructions = """\n{body.strip()}\n"""']) + "\n"
+
+
+def stop_hooks(path, cmd, on):
+    """Add or remove our Stop hook in a Claude settings.json or Codex hooks.json."""
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    groups = data.setdefault("hooks", {}).setdefault("Stop", [])
+    groups[:] = [g for g in groups if not any("verify_stop.py" in h.get("command", "") for h in g.get("hooks", []))]
+    if on:
+        groups.append({"hooks": [{"type": "command", "command": cmd, "timeout": 600}]})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def routing(on, hook, repo):
+    home = paths("global", repo)[0].parent
+    agents = sorted((ROUTING / "agents").glob("*.md"))
+    targets = [(Path.home() / ".claude" / "agents" / a.name, a.read_text(encoding="utf-8")) for a in agents]
+    if (Path.home() / ".codex").exists():
+        targets += [(Path.home() / ".codex" / "agents" / f"{a.stem}.toml", codex_agent(a.read_text(encoding="utf-8")))
+                    for a in agents]
+    skill = (ROUTING / "triage" / "SKILL.md").read_text(encoding="utf-8")
+    targets += [(d / "triage" / "SKILL.md", skill) for d in (home / "skills", Path.home() / ".claude" / "skills",
+                                                               Path.home() / ".agents" / "skills")]
+    for path, text in targets:
+        if on:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        elif path.exists():
+            path.unlink()
+            if path.name == "SKILL.md":
+                shutil.rmtree(path.parent, ignore_errors=True)
+        print(("+ " if on else "- ") + str(path))
+    script = home / "hooks" / "verify_stop.py"
+    if on and hook:
+        script.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROUTING / "verify_stop.py", script)
+    elif not on:
+        script.unlink(missing_ok=True)
+    if hook or not on:
+        cmd = f'python "{script}"'
+        stop_hooks(Path.home() / ".claude" / "settings.json", cmd, on and hook)
+        if (Path.home() / ".codex").exists():
+            stop_hooks(Path.home() / ".codex" / "hooks.json", cmd, on and hook)
+        print(("+ " if on and hook else "- ") + f"Stop hook {script}")
+    claude_md = Path.home() / ".claude" / "CLAUDE.md"
+    text = claude_md.read_text(encoding="utf-8") if claude_md.exists() else ""
+    if on and "overrides.md" not in text:  # install_global.py already imports it
+        claude_md.parent.mkdir(parents=True, exist_ok=True)
+        claude_md.write_text(text + ("\n" if text and not text.endswith("\n") else "") + "@~/.lab-forge/overrides.md\n",
+                             encoding="utf-8")
+        print(f"+ {claude_md}: @~/.lab-forge/overrides.md")
+    bullets = paths("global", repo)[0]
+    present = bullets.exists() and f"- {ROUTING_LINE}" in bullets.read_text(encoding="utf-8").splitlines()
+    if on != present:
+        apply("global", repo, ROUTING_LINE if on else None, None if on else ROUTING_LINE)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("action", choices=["add", "undo"])
+    parser.add_argument("action", choices=["add", "undo", "routing"])
     parser.add_argument("line", nargs="?")
     parser.add_argument("--scope", choices=["global", "repo"])
     parser.add_argument("--replace")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--hook", action="store_true", help="routing on: also install the Stop hook")
     args = parser.parse_args()
     if args.action == "add":
         if not args.line or not args.scope:
@@ -131,6 +201,10 @@ def main():
             scope, line, old = "global", tag + line, old and tag + old
             print("level 0 or default branch: nothing is written to the repo; stored in global overrides")
         apply(scope, args.repo, line, old)
+    elif args.action == "routing":
+        if args.line not in ("on", "off"):
+            parser.error("routing needs on or off")
+        routing(args.line == "on", args.hook, args.repo)
     else:
         scope, (new, old) = last_tune(args.repo)
         apply(scope, args.repo, old, new)

@@ -150,5 +150,6 @@ win.
   blocks a commit on `main` even when asked). Gemini CLI loads `~/.gemini/GEMINI.md` ✓ and
   repo `AGENTS.md` only with `context.fileName` (set by the installer). Codex, Copilot,
   Cursor and Antigravity IDE still need a run on a logged-in machine.
-- Model Routing Playbook (@donimas) not found. C8 rests on Claude and Codex docs
-  and superpowers SDD.
+- C2, C5 and C8 lost their first A/B (`bench/routing/results.md`): +28% cost, 6/8 vs
+  8/8 solved. They ship off by default (`tune.py routing on`). Next to test: triage
+  inline in the main thread, the Stop hook instead of the verifier subagent.
