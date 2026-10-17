@@ -1,0 +1,26 @@
+title = "New project, classic ML: churn prediction"
+kind = "new"
+packages = ["numpy", "pandas", "scikit-learn", "pytest", "ruff"]
+pytest = "all"
+brief = "a classic tabular ML project — customer churn prediction with scikit-learn and pandas, Python 3.12, pytest, ruff, metrics written to JSON files, no experiment tracker, data synthetic/local only."
+review = "Run `.venv/bin/python -m churn.train` from the snapshot root with no install and no PYTHONPATH, then pytest and ruff. Check ML methodology: leakage, calibration, threshold selection."
+
+[[steps]]
+id = "P1"
+kind = "code"
+prompt = "Start the project: build a customer churn prediction baseline. Generate a synthetic, seeded tabular churn dataset (~5k rows, a few numeric and categorical features, realistic signal). Train two models — logistic regression and gradient boosting — evaluate ROC-AUC on a held-out test split, and write the metrics to a JSON file. It must be runnable as `python -m churn.train` from the project root and have pytest tests. Commit when done."
+
+[[steps]]
+id = "P2"
+kind = "code"
+prompt = "Next step for the churn model: carve a validation split out of the training data, calibrate the gradient boosting probabilities, and pick the decision threshold that maximizes F1 on validation. Report precision, recall and F1 at that threshold on the test split in the metrics JSON, alongside the existing ROC-AUC. Model hyperparameters must be configurable from a config file, not hardcoded. Update the tests. `python -m churn.train` must still work from the project root. Commit when done."
+
+[[steps]]
+id = "T"
+kind = "tune"
+prompt = "From now on, answer my questions about this project in Russian."
+
+[[steps]]
+id = "P3"
+kind = "question"
+prompt = "How is the data split into train / validation / test, what guards against leakage, and where do I change the gradient boosting hyperparameters? Answer briefly with file:line references."
