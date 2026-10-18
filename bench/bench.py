@@ -88,6 +88,21 @@ plugins (e.g. "caveman" terse mode). {mode}
 """
 
 
+SESSION_ENV = (
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "TMPDIR",
+    "UV_CACHE_DIR",
+    "SSL_CERT_FILE",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "ANTHROPIC_API_KEY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+)
+
+
 def sh(cmd, cwd=None, env=None, check=True, timeout=None):
     out = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, check=False, timeout=timeout)
     if check and out.returncode:
@@ -435,7 +450,9 @@ def prepare(args):
     out.mkdir(parents=True, exist_ok=True)
     (out / "state").mkdir(exist_ok=True)
     (out / "bench.json").write_text(
-        json.dumps({"arms": arms, "reps": args.reps, "seed": args.seed, "cases": list(cases)}, indent=1)
+        json.dumps(
+            {"arms": arms, "reps": args.reps, "seed": args.seed, "cases": list(cases), "decide": decide}, indent=1
+        )
     )
     env = {**os.environ, "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(out / ".uvcache"))}
     for name, case in cases.items():
@@ -494,11 +511,12 @@ def prepare(args):
                 print("prepared", ws)
 
 
-def claude(prompt, cwd, home, model, add_dir=None, timeout=3600):
-    """One fresh headless session. Auth comes from ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE")} | {"HOME": str(home)}
-    if "CLAUDE_CODE_OAUTH_TOKEN" in os.environ:
-        env["CLAUDE_CODE_OAUTH_TOKEN"] = os.environ["CLAUDE_CODE_OAUTH_TOKEN"]
+def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=()):
+    """One fresh headless session. Auth comes from ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
+
+    The session and the code it runs see only SESSION_ENV plus `keys`, never the rest of the runner's secrets.
+    """
+    env = {k: os.environ[k] for k in (*SESSION_ENV, *keys) if k in os.environ} | {"HOME": str(home)}
     cmd = ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", "bypassPermissions"]
     cmd += ["--model", model] if model else []
     cmd += ["--add-dir", add_dir] if add_dir else []
@@ -529,13 +547,14 @@ def run(args):
 
         def one(item):
             ws, step = item
-            skill = b.cfg["arms"][b.state(ws)["arm"]]
+            arm = b.state(ws)["arm"]
             reply, tok, turns, ms, cost = claude(
                 b.prompt(ws, step, "claude"),
                 b.out / "ws" / ws,
                 b.out / "home" / ws,
                 args.model,
-                skill if step["kind"] == "deploy" else None,
+                b.cfg["arms"][arm] if step["kind"] == "deploy" else None,
+                keys=["LIQUID_AI_API_KEY"] if b.cfg.get("decide", {}).get(arm) == "hosted" else [],
             )
             b.record(ws, step["id"], tok, turns, ms, reply, cost)
             print(ws, step["id"], tok, "tokens")

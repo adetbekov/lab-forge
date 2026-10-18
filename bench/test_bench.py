@@ -1,7 +1,12 @@
 """Unit tests for the pure parts of the bench: python -m pytest bench"""
 
-from bench import is_ai, is_russian, ws_name
+import json
+import types
+
 from report import build
+
+import bench
+from bench import is_ai, is_russian, ws_name
 
 
 def test_ws_name_is_opaque_and_stable():
@@ -60,3 +65,20 @@ def test_report_flags_reproduced_conclusions():
     assert "| Solved, hidden checks | 0/1 | 1/1 |" in text
     assert "| Tune phrase applied in next session | 1/1 | 0/1 |" in text
     assert len(tsv.splitlines()) == len(rows) + 1
+
+
+def test_session_sees_only_allowed_secrets(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake_sh(cmd, cwd=None, env=None, check=True, timeout=None):
+        seen.update(env)
+        return types.SimpleNamespace(stdout=json.dumps({"result": "ok", "usage": {}}), stderr="")
+
+    monkeypatch.setattr(bench, "sh", fake_sh)
+    for k in ("CLAUDE_CODE_OAUTH_TOKEN", "LIQUID_AI_API_KEY", "GITHUB_TOKEN", "S3_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(k, "x")
+    bench.claude("p", tmp_path, tmp_path, None)
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in seen and seen["HOME"] == str(tmp_path)
+    assert not {"LIQUID_AI_API_KEY", "GITHUB_TOKEN", "S3_SECRET_ACCESS_KEY"} & set(seen)
+    bench.claude("p", tmp_path, tmp_path, None, keys=["LIQUID_AI_API_KEY"])
+    assert "LIQUID_AI_API_KEY" in seen and "GITHUB_TOKEN" not in seen
