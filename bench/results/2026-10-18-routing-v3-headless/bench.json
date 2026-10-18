@@ -1,0 +1,14 @@
+{
+ "arms": {
+  "fixed": "/root/multica_workspaces/jebe-apps-5cdffdcfc169/jeb-1892-8622ba2fa691/workdir/rv3/skills/fixed/lab-forge",
+  "routed": "/root/multica_workspaces/jebe-apps-5cdffdcfc169/jeb-1892-8622ba2fa691/workdir/rv3/skills/routed/lab-forge"
+ },
+ "reps": 2,
+ "seed": 1877,
+ "cases": [
+  "churn",
+  "encoders",
+  "optuna",
+  "rparse"
+ ]
+}

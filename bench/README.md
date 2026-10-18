@@ -37,7 +37,8 @@ When `claude -p` is not available, an orchestrating agent runs each step in a fr
 
 For arms that need more than one session per step (routing), `bench/routing/rprompt.py` builds the main, worker and
 verifier prompts from the `next` prompt, runs the Stop hook and prints the relay message; `bench/routing/cost.py`
-prices the coding steps from `sessions.tsv`.
+prices the coding steps from `sessions.tsv`. With a headless CLI, `bench/routing/headless.py run --out DIR` runs the routing A/B in real sessions
+(native subagents and Stop hook, cost from `total_cost_usd`/`modelUsage`); `report --out DIR` prints the table.
 
 If a hidden check turns out to be wrong, fix it and run `bench.py recheck --out DIR`; no session needs to rerun.
 

@@ -1,0 +1,41 @@
+ws	case	arm	rep	step	solved	cost_usd	turns	ms	agents	agent_models	frontmatter_ok	escalations	stop_blocks	subagent_stop_blocks	error
+churn-9a3366	churn	fixed	1	P0		0.23836749999999998	12	47960	{}	{}	True	0	0	0	
+churn-45e581	churn	fixed	2	P0		0.2628162	15	52262	{}	{}	True	0	0	0	
+rparse-215ddc	rparse	fixed	1	P0		0.28187999999999996	12	62651	{}	{}	True	0	0	0	
+encoders-eb469d	encoders	fixed	2	P0		0.36056170000000004	16	122098	{}	{}	True	0	0	0	
+optuna-af49f0	optuna	fixed	2	P0		0.37385550000000006	18	152631	{}	{}	True	0	0	0	
+encoders-a0e9ba	encoders	fixed	1	P0		0.4194259	16	177061	{}	{}	True	0	0	0	
+rparse-837919	rparse	fixed	2	P0		0.2920654	15	185516	{}	{}	True	0	0	0	
+optuna-b39b2e	optuna	fixed	1	P0		0.4820162	1	3101	{}	{}	True	0	0	0	
+churn-45e581	churn	fixed	2	P1	True	0.4723694	9	120001	{}	{}	True	0	0	0	
+churn-1c5149	churn	routed	2	P1	True	0.5139851200000001	10	155660	"{""verifier"": 1}"	"{""verifier"": [""claude-haiku-5-5""]}"	True	0	0	0	
+churn-20b1d3	churn	routed	1	P1	True	0.4740918	9	159688	"{""verifier"": 1}"	"{""verifier"": [""claude-haiku-5-5""]}"	True	0	0	0	
+optuna-02ce28	optuna	routed	2	P1	True	0.4528881	6	206759	"{""quick"": 1}"	"{""quick"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+churn-9a3366	churn	fixed	1	P1	True	0.5308058	9	362833	{}	{}	True	0	0	0	
+encoders-69ae01	encoders	routed	2	P1	True	0.44544290000000003	7	428019	"{""build"": 1}"	"{""build"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+encoders-eb469d	encoders	fixed	2	P1	True	0.5754682000000001	14	428899	{}	{}	True	0	0	0	
+encoders-960ee0	encoders	routed	1	P1	True	0.514786	8	453468	"{""quick"": 1}"	"{""quick"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+optuna-af49f0	optuna	fixed	2	P1	True	0.5114946	16	366572	{}	{}	True	0	0	0	
+rparse-837919	rparse	fixed	2	P1	True	0.8860258	16	197489	{}	{}	True	0	0	0	
+rparse-215ddc	rparse	fixed	1	P1	True	0.8819392000000001	15	203323	{}	{}	True	0	0	0	
+rparse-083ca5	rparse	routed	1	P1	True	1.134640565	18	278501	"{""verifier"": 1}"	"{""verifier"": [""claude-haiku-5-5""]}"	True	0	0	0	
+rparse-9d6cf2	rparse	routed	2	P1	True	1.03298815	13	263869	"{""verifier"": 1}"	"{""verifier"": [""claude-haiku-5-5""]}"	True	0	0	0	
+encoders-a0e9ba	encoders	fixed	1	P1	True	0.49963620000000003	13	826171	{}	{}	True	0	0	0	
+optuna-b39b2e	optuna	fixed	1	P1	True	0.5660712	19	548398	{}	{}	True	0	0	0	
+optuna-07117b	optuna	routed	1	P1	True	0.6566950000000001	14	752865	"{""quick"": 1}"	"{""quick"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+churn-45e581	churn	fixed	2	P2	True	0.5685463999999999	11	156949	{}	{}	True	0	0	0	
+churn-1c5149	churn	routed	2	P2	True	0.6733048999999999	10	195293	"{""build"": 1}"	"{""build"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+churn-20b1d3	churn	routed	1	P2	True	0.5976058799999999	10	219482	"{""verifier"": 1}"	"{""verifier"": [""claude-haiku-5-5""]}"	True	0	0	0	
+encoders-a0e9ba	encoders	fixed	1	P2	True	0.4378884	13	230871	{}	{}	True	0	0	0	
+encoders-960ee0	encoders	routed	1	P2	True	0.4283209	9	240911	"{""quick"": 1}"	"{""quick"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+encoders-eb469d	encoders	fixed	2	P2	True	0.4570488	12	372004	{}	{}	True	0	0	0	
+rparse-083ca5	rparse	routed	1	P2	True	0.6262709999999999	7	135574	"{""build"": 1}"	"{""build"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+churn-9a3366	churn	fixed	1	P2	False	0.5929500000000001	12	443842	{}	{}	True	0	0	0	
+rparse-215ddc	rparse	fixed	1	P2	True	0.56488	10	110521	{}	{}	True	0	0	0	
+encoders-69ae01	encoders	routed	2	P2	True	0.43123829999999996	6	510766	"{""build"": 1}"	"{""build"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+rparse-837919	rparse	fixed	2	P2	True	0.7487512	18	126799	{}	{}	True	0	0	0	
+optuna-af49f0	optuna	fixed	2	P2	True	0.48156979999999994	15	337652	{}	{}	True	0	0	0	
+rparse-9d6cf2	rparse	routed	2	P2	True	0.7568336999999999	8	157646	"{""build"": 1}"	"{""build"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+optuna-02ce28	optuna	routed	2	P2	True	0.5859335	9	729857	"{""quick"": 1}"	"{""quick"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+optuna-07117b	optuna	routed	1	P2	True	0.5877885000000002	11	725861	"{""quick"": 1}"	"{""quick"": [""claude-sonnet-5-5""]}"	True	0	0	0	
+optuna-b39b2e	optuna	fixed	1	P2	True	0.7271613999999997	25	1024631	{}	{}	True	0	0	0	

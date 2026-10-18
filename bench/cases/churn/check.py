@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import tomllib
+
 
 def leaves(obj, prefix=""):
     if isinstance(obj, dict):
@@ -31,6 +33,14 @@ def fresh_metrics(before):
             continue
 
 
+def has_hyperparams(path):
+    """A config file naming GBM hyperparameters; in pyproject.toml only a [tool.*] table counts."""
+    text = path.read_text(errors="ignore")
+    if path.name == "pyproject.toml":
+        text = json.dumps(tomllib.loads(text).get("tool", {}))
+    return any(h in text for h in ("learning_rate", "max_depth", "max_iter", "n_estimators"))
+
+
 def main(step):
     before = files()
     run = subprocess.run(
@@ -51,15 +61,7 @@ def main(step):
         missing = [m for m in ("precision", "recall", "f1") if not any(m in k for k in flat)]
         if missing:
             return f"{path.name}: no {missing} in metrics"
-        configs = [
-            p
-            for p in before
-            if p.suffix in {".yaml", ".yml", ".toml", ".json"}
-            and p.name != "pyproject.toml"
-            and any(
-                h in p.read_text(errors="ignore") for h in ("learning_rate", "max_depth", "max_iter", "n_estimators")
-            )
-        ]
+        configs = [p for p in before if p.suffix in {".yaml", ".yml", ".toml", ".json"} and has_hyperparams(p)]
         return None if configs else "no config file with GBM hyperparameters"
     return "no JSON with two ROC-AUC values in (0.5, 1] written by the run"
 

@@ -1,5 +1,87 @@
 # Results: model routing (C2, C5, C8), 2026-10-18
 
+## v3: headless, native subagents, real billing (JEB-1892)
+
+**Verdict: v3 loses. Routing stays off by default, and PR #6 stays closed.** In real `claude -p`
+sessions, Claude Code started the subagents from their frontmatter and fired the Stop hook itself.
+Cost comes from billing. Routing cost 4% more per solved step than running everything on Opus
+($0.620 vs $0.594), and both arms solved 16/16. This replaces v2's token proxy (+11%) with real
+numbers, and the direction is the same.
+
+### Setup
+- Driver: [`headless.py`](headless.py). Cases `churn`, `rparse`, `optuna`, `encoders`, 2 repeats,
+  steps P1 and P2. Claude Code 2.1.300. Raw data, including every session's stream-json, is in
+  [`results/2026-10-18-routing-v3-headless`](../results/2026-10-18-routing-v3-headless/report.md).
+- P0 (the lab-forge deploy) ran once per case and repeat on Sonnet, in the fixed workspace. It was
+  copied into the routed one (repo with `.git`, and HOME, with paths rewritten). Then
+  `tune.py routing on` ran in the routed HOME. `fakeredis` was installed in the optuna venvs.
+- `fixed`: each step is one Opus 5.5 session at default effort.
+- `routed`: the same session, plus the routing setup in HOME: the tier line in `~/.lab-forge/overrides.md`,
+  `~/.claude/agents/{quick,build,verifier}.md`, and `verify_stop.py` as Stop and SubagentStop
+  hook in `~/.claude/settings.json`. Nothing simulated: the headless prompt has no "no subagents" rule.
+- Cost per step is the result's `total_cost_usd`. The per-model split comes from `modelUsage`,
+  which includes subagents. Subagent calls, the model of each subagent message, and hook
+  results are read from `--output-format stream-json --include-hook-events`.
+
+### Coding steps (P1 + P2)
+
+| Metric | fixed | routed |
+|---|---|---|
+| Solved, hidden checks | 16/16 | 16/16 |
+| Real cost, `total_cost_usd`, $ | 9.50 | 9.91 |
+| Cost per solved step, $ | 0.594 | 0.620 |
+| Steps with a native subagent call | 0/16 | 16/16 |
+| Native calls: `quick` / `build` / `verifier` | 0 / 0 / 0 | 6 / 5 / 5 |
+| Subagent ran on a model other than its frontmatter | — | 0 |
+| Escalations (`ESCALATE` in a subagent report) | — | 0 |
+| Stop hook: fired / blocked | — | 16 / 0 |
+| SubagentStop hook: fired / blocked | — | 16 / 0 |
+| Session time, min | 97.6 | 93.6 |
+
+Cost by model: fixed $9.50 Opus. Routed $8.30 Opus, $1.59 Sonnet, $0.03 Haiku.
+
+Every routed step called a subagent. `quick` and `build` messages ran on `claude-sonnet-5-5`,
+and `verifier` messages on `claude-haiku-5-5`, as their frontmatter says. So the delegation
+proof holds and the run counts.
+
+Paired against fixed on the same case, repeat and step:
+
+| Tier picked in routed | Steps | fixed, $ | routed, $ | Diff | Routed Opus share |
+|---|---|---|---|---|---|
+| quick | 6 | 3.22 | 3.23 | +0% | $2.37 (74% of fixed) |
+| build | 5 | 2.91 | 2.93 | +1% | $2.20 (76% of fixed) |
+| L/XL, main does it, then `verifier` | 5 | 3.36 | 3.75 | +12% | $3.73 |
+
+### Why it loses
+1. **Delegation breaks even, but it does not save.** On delegated steps the Opus main session
+   still costs about 75% of a whole fixed run: it reads the context, picks the tier, writes
+   the handoff, then checks and relays the worker's report. The Sonnet worker costs about the
+   remaining 25%. The real cost of a delegated step therefore matches fixed within 1%. v2's
+   proxy put these steps at +8% and +14%. Real billing, with cache reads at the same price on
+   both models, narrows the gap but does not close it.
+2. **L/XL costs more.** The main session does the whole task, then starts `verifier` and reads
+   its report. Haiku costs $0.03 in total. The extra Opus turns around it add 12%. All 5
+   verifier runs passed.
+3. **The hook added nothing here.** It fired 32 times and blocked none, because no session
+   stopped with red tests. Once the `fakeredis` gap was closed, v2's false block did not
+   recur. Quality signals are equal: files outside scope 4 vs 4 (`CHANGELOG.md` in encoders,
+   both arms), 0 unresolved imports, 0 ruff errors, 0 commits on `main`.
+
+### Hidden check fixed in this run
+The first pass scored fixed 15/16. In churn r1 P2, fixed moved the hyperparameters to
+`[tool.churn]` in `pyproject.toml`, which meets "configurable from a config file". The check
+rejected every `pyproject.toml`. It now accepts hyperparameters under a `[tool.*]` table
+(`bench/cases/churn/check.py`), and `bench.py recheck` ran on all 32 steps (32/32 pass). Before
+the fix, routing would have "won" ($0.620 vs $0.634) on that single false negative. The pre-fix
+state is not committed. The fix and this note are the record.
+
+### Limits
+- n=2, synthetic tasks of 1-3 files, one model family. No task was large enough for a worker
+  to do most of the work. That is the only case where the split could pay off.
+- One fixed step (optuna r1 P2) left pytest red on its changed test files while its hidden check passed.
+- `total_cost_usd` is Claude Code's client-side price at list rates (`costBasis: list`). It is the
+  same for both arms.
+
 ## v2: tier rule in the main thread + Stop hook (JEB-1890)
 
 **Verdict: v2 loses as well, by less. Keep routing off by default.** On the coding steps it
