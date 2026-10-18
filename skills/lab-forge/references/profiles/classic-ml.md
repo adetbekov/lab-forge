@@ -20,14 +20,23 @@ Airflow, Makefile) - detect which one and use it.
 Exploration in notebooks (text format). A feature or model change is promoted
 only with a metric delta on the same validation setup.
 
-## Invariants worth proposing
-- Target and features computed for the same period and population.
-- No information from after the prediction date in features (leakage check).
-- Split and seeds from config; the same split for every compared model.
-- Data, model files and per-run metrics are not committed; only the baseline metrics file is.
+## Repo block
+Copied into the repo `AGENTS.md` verbatim, markers included, in deploy and seed mode.
+Never paraphrase it; `verify_setup.py` checks the sha.
+
+<!-- lab-forge:begin profile classic-ml sha=d37f00ba73ed -->
+P1. Each fitted step (scaling, encoding, calibration, threshold, early stopping, search) learns on rows
+    it is not evaluated on: its own split or CV inside the training rows. The threshold is never
+    picked on the rows the calibrator was fitted on.
+P2. Split and seeds come from config; every compared model gets the same split and metric.
+P3. Target and features cover the same period and population; nothing from after the prediction date.
+P4. Data, model files and per-run metrics are not committed; only the baseline metrics file is.
+P5. Bare `pytest` from the root is green. A new project gets a minimal `pyproject.toml` (name, deps,
+    `[tool.pytest.ini_options]` `pythonpath = ["."]`); it is setup, not layout.
+<!-- lab-forge:end -->
 
 ## Domain slop to forbid in rules
 - Changing the split or the metric while comparing models.
-- Fitting preprocessing on the full dataset.
+- Fitting preprocessing on the full dataset, or calibration and threshold on the same rows.
 - Silent row drops or fills without logging counts.
 - Re-implementing a metric the project or library already has.

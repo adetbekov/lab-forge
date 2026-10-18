@@ -20,10 +20,12 @@ for a DS/ML engineer:
 | Artifact | Template | Always? |
 |---|---|---|
 | Repo `AGENTS.md`: commands, map, invariants, words | `rules.md` | yes |
+| Profile repo block, copied verbatim into the repo `AGENTS.md` | `references/profiles/*.md` | yes, seed too |
+| Minimal `pyproject.toml` with the pytest `pythonpath` | section 3 | new Python project |
 | `CLAUDE.md` with the single line `@AGENTS.md` | - | if Claude Code is used |
 | Pointers for other agents present | `pointer.md` | if 2+ agents |
 | Skill `task-intake` - size the task, decompose, plan for L | `skill-task-intake.md` | yes |
-| Skill `self-review` - anti-slop check of own diff | `skill-self-review.md` | yes |
+| Skill `self-review` - anti-slop check of own diff, M and bigger | `skill-self-review.md` | yes |
 | Skill `grill` - ask only what changes the result, as real options | `skill-grill.md` | yes |
 | Skill `experiment` - hypothesis -> baseline -> measure -> promote | `skill-experiment.md` | DS/ML/agents projects |
 | Skill `pr-description` | `skill-pr-description.md` | if PRs are used |
@@ -40,8 +42,10 @@ offered only when the audit shows the need and the user says yes.
 
 | File | Max lines |
 |---|---|
-| Repo `AGENTS.md` (managed global copy not counted) | 60 |
-| Global `AGENTS.md` + `overrides.md` | 80 |
+| Repo `AGENTS.md`, profile block included (managed global copy not counted) | 60 |
+| Global core (`core.md`) | 30 |
+| Global core + repo template (`rules.md`) | 60 |
+| Global `AGENTS.md` (core + defaults) + `overrides.md` | 80 |
 | Pointer | 5 |
 | Generated skill SKILL.md | 120 |
 | Command | 10 |
@@ -56,6 +60,10 @@ Over budget -> cut or move detail into a skill; never shrink by removing the
 - Facts only: commands, paths, invariants, domain words. Anything about how to
   work (branches, scope, task size, style, replies) is in the global layer;
   writing it again here is drift.
+- The profile's `## Repo block` goes in as is, markers included, in place of
+  `{{profile_block}}`. Never shorten or reword it: a paraphrase drops the rule
+  that matters (v0.3 turned "own split per fitted step" into "nothing chosen on
+  test"). `verify_setup.py` fails on any change. Project invariants follow it.
 - Numbered, imperative, one line per rule where possible, with the reason when
   it is not obvious. The agent follows rules better when it knows why.
 - Every pain point from the interview becomes a concrete rule, phrased as what
@@ -66,6 +74,9 @@ Over budget -> cut or move detail into a skill; never shrink by removing the
 - New project: prescribe no package layout. If you must, it has to let stated
   commands run from the root with no install step (`pkg/` at the root, not
   `src/pkg/`, unless an editable install is part of setup).
+- A new Python project gets a minimal `pyproject.toml`: name, deps and
+  `[tool.pytest.ini_options]` `pythonpath = ["."]`. It is setup, not layout.
+  The phase 6 dry run includes a bare `pytest`.
 - Config format: only what the env reads today (`detect_env.py` reports the
   importable parsers). TOML via `tomllib` on 3.11+, else JSON; YAML only with
   PyYAML installed. The file extension matches the content.
@@ -105,13 +116,15 @@ Level 3: one CI job that runs the same checks. Nothing more without asking.
 
 Run `scripts/verify_setup.py <project>` after generating. It checks budgets,
 that relative links resolve, that no two rule files carry the same full rule
-text, and that each skill has name and description. Fix every failure, then do
+text, that each skill has name and description, and that the profile block
+matches `references/profiles/` byte for byte (sha). `verify_setup.py --engine`
+checks the engine itself: core ≤ 30 lines, core + repo template ≤ 60. Fix every failure, then do
 the dry run described in SKILL.md phase 6.
 
 ## 8. Global layer and harness adapters
 
 `scripts/install_global.py install --harness <list>` writes `~/.lab-forge/`
-(`AGENTS.md` from `assets/templates/global-agents.md`, `overrides.md`,
+(`AGENTS.md` from `assets/templates/core.md` + `defaults.md`, `overrides.md`,
 `hooks/guard.py`, `state.md`) and one managed block per harness. It never
 touches text outside its `<!-- lab-forge:begin/end -->` markers, and a rerun
 keeps the canary.

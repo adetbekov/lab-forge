@@ -197,7 +197,8 @@ def install(harnesses, hooks, decide=None, decide_url=None, decide_model=None, d
     canary = canary or f"LF-{secrets.token_hex(4)}"
     harnesses = list(dict.fromkeys([*installed, *harnesses]))  # a partial rerun keeps the others
     (lf / "hooks").mkdir(parents=True, exist_ok=True)
-    rules = read(ENGINE / "assets" / "templates" / "global-agents.md").replace("{{canary}}", canary)
+    rules = "".join(read(ENGINE / "assets" / "templates" / name) for name in ("core.md", "defaults.md"))
+    rules = rules.replace("{{canary}}", canary).replace("{{engine}}", ENGINE.as_posix())
     (lf / "AGENTS.md").write_text(rules, encoding="utf-8")
     if not (lf / "overrides.md").exists():
         (lf / "overrides.md").write_text("# Overrides\n", encoding="utf-8")

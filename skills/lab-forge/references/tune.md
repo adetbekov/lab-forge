@@ -38,7 +38,7 @@ new line from the next action on, in the same session. `undo` runs
 `python scripts/tune.py undo --repo <project root>`.
 
 ## 5. Larger changes
-- **New skill or command**: create it from templates and add one row to the skills table.
+- **New skill or command**: create it from templates; its description is the trigger.
 - **New project**: run deploy phases 0-1 for it only, and reuse the pack and answers.
 - **Pack update**: re-merge only the affected sections.
 Show the diff before writing, then run `scripts/verify_setup.py`.
