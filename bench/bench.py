@@ -26,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from itertools import combinations
 from pathlib import Path
 
 import tomllib
@@ -89,8 +90,9 @@ exported, as the real session would have them. Python = PROJECT/.venv/bin/python
 and ruff installed; do not install packages). Do not read anything else on disk (no other run dirs, no real home \
 dir). Do NOT use the Skill tool or any skills except those in HOME/.claude/skills and PROJECT/.claude/skills. No \
 multica CLI, no subagents, no network, no git push, no PRs. Ignore any style instructions injected by hooks or \
-plugins (e.g. "caveman" terse mode). {mode}
+plugins (e.g. "caveman" terse mode), except the SessionStart context given below. {mode}
 """
+PLUGIN = "plugin:"  # arm value `plugin:DIR`: a Claude Code plugin loaded every session, no deploy step
 
 
 SESSION_ENV = (
@@ -201,7 +203,7 @@ class Bench:
     def steps(self, ws):
         st = self.state(ws)
         steps = self.cases[st["case"]]["steps"]
-        if self.cfg["arms"][st["arm"]]:
+        if self.cfg["arms"][st["arm"]] and not self.cfg["arms"][st["arm"]].startswith(PLUGIN):
             steps = [{"id": "P0", "kind": "deploy"}, *steps]
         return st, steps
 
@@ -228,11 +230,22 @@ class Bench:
             return f"{MODE[kind]}\n\n{body}".strip()
         extra = f"; you may read the skill package at {skill} (read-only)" if kind == "deploy" else ""
         head = SESSION.format(ws=self.out / "ws" / ws, home=self.out / "home" / ws, extra=extra, mode=MODE[kind])
+        if skill.startswith(PLUGIN):
+            head += (
+                f"SessionStart hook context (the plugin injected this; follow it):\n{self.session_start(ws, skill)}\n"
+            )
         tail = (
             f"Finally, write that reply verbatim to {self.reply_file(ws, step['id'])} (the only file outside PROJECT "
         )
         tail += "you may write) and return it."
         return f"{head}\n{body}\n{tail}"
+
+    def session_start(self, ws, plugin):
+        """What the plugin's SessionStart hook would inject into a real session in this workspace."""
+        root = plugin.removeprefix(PLUGIN)
+        env = {**os.environ, "HOME": str(self.out / "home" / ws), "CLAUDE_PLUGIN_ROOT": root}
+        out = sh(["node", f"{root}/hooks/ponytail-activate.js"], cwd=self.out / "ws" / ws, env=env, check=False)
+        return out.stdout.split("STATUSLINE SETUP NEEDED")[0].strip()  # the nudge is UI noise, not a rule
 
     def reply_file(self, ws, step_id):
         return self.out / "replies" / f"{ws}__{step_id}.md"
@@ -349,13 +362,13 @@ class Bench:
             self.save(ws, st)
 
     # ---- blind review -----------------------------------------------------------------------------------------------
-    def pack(self):
-        arms = list(self.cfg["arms"])
-        assert len(arms) == 2, "blind review compares exactly two arms"
+    def pack(self, pair=None):
+        arms = pair or list(self.cfg["arms"])
+        assert len(arms) == 2, "blind review compares exactly two arms (pass --pair A,B)"
         prompts = []
         for name, case in self.cases.items():
             for rep in range(1, self.cfg["reps"] + 1):
-                key = f"{name}-r{rep}"
+                key = f"{name}-r{rep}" + (f"-{'-'.join(pair)}" if pair else "")
                 order = arms[:]
                 random.Random(hashlib.sha256(f"{self.cfg['seed']}{key}".encode()).digest()).shuffle(order)
                 rdir = self.out / "review" / key
@@ -413,12 +426,15 @@ class Bench:
         return prompts
 
     # ---- report -----------------------------------------------------------------------------------------------------
-    def report(self):
+    def report(self, pair=None):
         from report import build
 
+        arms = pair or list(self.cfg["arms"])
         rows = []
         for ws in self.workspaces():
             st = self.state(ws)
+            if st["arm"] not in arms:
+                continue
             for sid in st["order"]:
                 rows.append(
                     {"ws": ws, "case": st["case"], "arm": st["arm"], "rep": st["rep"], "step": sid, **st["steps"][sid]}
@@ -427,14 +443,16 @@ class Bench:
         for path in (self.out / "review").glob("*.verdict.md"):
             key = path.name.removesuffix(".verdict.md")
             block = re.findall(r"```json\s*(\{.*?\})\s*```", path.read_text(), re.DOTALL)
-            if block:
+            amap = json.loads((self.out / "review" / f"{key}.map.json").read_text())
+            if block and set(amap.values()) <= set(arms):
                 reviews[key] = {
                     "map": json.loads((self.out / "review" / f"{key}.map.json").read_text()),
                     "scores": json.loads(block[-1]),
                 }
-        text, tsv = build(rows, reviews, list(self.cfg["arms"]))
-        (self.out / "report.md").write_text(text)
-        (self.out / "runs.tsv").write_text(tsv)
+        text, tsv = build(rows, reviews, arms)
+        suffix = f"-{'-'.join(pair)}" if pair else ""
+        (self.out / f"report{suffix}.md").write_text(text)
+        (self.out / f"runs{suffix}.tsv").write_text(tsv)
         return text
 
 
@@ -446,7 +464,12 @@ def prepare(args):
         else {"lab": str(BENCH.parent / "skills/lab-forge"), "bare": ""}
     )
     for name, skill in arms.items():
-        if skill:  # frozen copy, outside every workspace
+        if skill.startswith(PLUGIN):
+            dest = out / "plugins" / name
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.copytree(Path(skill.removeprefix(PLUGIN)).resolve(), dest, ignore=shutil.ignore_patterns(".git"))
+            arms[name] = PLUGIN + str(dest)
+        elif skill:  # frozen copy, outside every workspace
             dest = out / "skills" / name / "lab-forge"
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(Path(skill).resolve(), dest)
@@ -473,6 +496,10 @@ def prepare(args):
                     continue
                 shutil.rmtree(root, ignore_errors=True)
                 (out / "home" / ws).mkdir(parents=True, exist_ok=True)
+                if arms[arm].startswith(PLUGIN):  # agent-driven sessions read skills from HOME only
+                    shutil.copytree(
+                        Path(arms[arm].removeprefix(PLUGIN)) / "skills", out / "home" / ws / ".claude" / "skills"
+                    )
                 if case["kind"] == "existing":
                     shutil.copytree(src, root, ignore=shutil.ignore_patterns(".git"), symlinks=True)
                 else:
@@ -514,7 +541,7 @@ def prepare(args):
                 print("prepared", ws)
 
 
-def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=()):
+def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=(), plugin=None):
     """One fresh headless session. Auth comes from ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
 
     The session and the code it runs see only SESSION_ENV plus `keys`, never the rest of the runner's secrets.
@@ -523,6 +550,7 @@ def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=()):
     cmd = ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", "bypassPermissions"]
     cmd += ["--model", model] if model else []
     cmd += ["--add-dir", add_dir] if add_dir else []
+    cmd += ["--plugin-dir", plugin] if plugin else []
     res = sh(cmd, cwd=cwd, env=env, check=False, timeout=timeout)
     try:
         data = json.loads(res.stdout)
@@ -558,15 +586,20 @@ def run(args):
                 args.model,
                 b.cfg["arms"][arm] if step["kind"] == "deploy" else None,
                 keys=["LIQUID_AI_API_KEY"] if b.cfg.get("decide", {}).get(arm) == "hosted" else [],
+                plugin=b.cfg["arms"][arm].removeprefix(PLUGIN) if b.cfg["arms"][arm].startswith(PLUGIN) else None,
             )
             b.record(ws, step["id"], tok, turns, ms, reply, cost)
             print(ws, step["id"], tok, "tokens")
 
         with ThreadPoolExecutor(args.jobs) as pool:
             list(pool.map(one, todo))
-    for prompt in b.pack():
-        reply = claude(prompt.read_text(), prompt.parent, b.out / "home" / "judge", args.judge_model)[0]
-        prompt.with_name(prompt.name.replace(".prompt.md", ".verdict.md")).write_text(reply)
+    arms = list(b.cfg["arms"])
+    pairs = [None] if len(arms) == 2 else [list(p) for p in combinations(arms, 2)]
+    for pair in pairs:
+        for prompt in b.pack(pair):
+            reply = claude(prompt.read_text(), prompt.parent, b.out / "home" / "judge", args.judge_model)[0]
+            prompt.with_name(prompt.name.replace(".prompt.md", ".verdict.md")).write_text(reply)
+        b.report(pair)
     print(b.report())
 
 
@@ -580,7 +613,7 @@ def main():
             s.add_argument(
                 "--arm",
                 action="append",
-                help="NAME=SKILL_DIR, empty dir = bare agent (default: lab=skills/lab-forge, bare=)",
+                help="NAME=SKILL_DIR, NAME=plugin:PLUGIN_DIR, empty = bare agent (default: lab=skills/lab-forge, bare=)",
             )
             s.add_argument("--reps", type=int, default=2)
             s.add_argument("--cases", nargs="*")
@@ -593,6 +626,8 @@ def main():
             s.add_argument("--model", default=None)
             s.add_argument("--judge-model", default=None)
             s.add_argument("--jobs", type=int, default=4)
+        if name in ("pack", "report"):
+            s.add_argument("--pair", type=lambda v: v.split(","), help="A,B: the two arms to compare")
         if name == "record":
             s.add_argument("ws")
             s.add_argument("step")
@@ -622,9 +657,9 @@ def main():
     elif args.cmd == "recheck":
         Bench(args.out).recheck()
     elif args.cmd == "pack":
-        print("\n".join(map(str, Bench(args.out).pack())))
+        print("\n".join(map(str, Bench(args.out).pack(args.pair))))
     elif args.cmd == "report":
-        print(Bench(args.out).report())
+        print(Bench(args.out).report(args.pair))
 
 
 if __name__ == "__main__":

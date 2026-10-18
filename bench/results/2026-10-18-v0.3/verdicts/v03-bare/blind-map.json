@@ -1,0 +1,18 @@
+{
+ "churn": {
+  "X": "v03",
+  "Y": "bare"
+ },
+ "rparse": {
+  "X": "bare",
+  "Y": "v03"
+ },
+ "optuna": {
+  "X": "v03",
+  "Y": "bare"
+ },
+ "encoders": {
+  "X": "v03",
+  "Y": "bare"
+ }
+}

@@ -3,13 +3,15 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest results: [`results/2026-10-18-skillpick`](results/2026-10-18-skillpick/notes.md),
+Latest results: [`results/2026-10-18-v0.3`](results/2026-10-18-v0.3/report.md) (v0.3 vs v0.2, ponytail, bare),
+[`results/2026-10-18-skillpick`](results/2026-10-18-skillpick/notes.md),
 [`results/2026-10-18-decide-vs-main`](results/2026-10-18-decide-vs-main/notes.md),
 [`results/2026-10-18-v0.2-vs-bare`](results/2026-10-18-v0.2-vs-bare/report.md),
 [`results/2026-10-18-layers-vs-v0.1`](results/2026-10-18-layers-vs-v0.1/notes.md),
 [`results/2026-10-18-layers-vs-v0.1-headless`](results/2026-10-18-layers-vs-v0.1-headless/notes.md),
 [`results/2026-10-18-memory-wiki-vs-map`](results/2026-10-18-memory-wiki-vs-map/report.md) ([summary](memory/results.md));
 [`results/2026-10-18-model-mix`](results/2026-10-18-model-mix/report.md) (which model plays which role, `modelmix/mix.py`);
+[`results/2026-10-18-ponytail`](results/2026-10-18-ponytail/report.md) (ponytail plugin vs v0.2 vs bare);
 previous: [`v0.1`](results/2026-10-17-v0.1-vs-bare/report.md).
 
 ## Run it
@@ -21,6 +23,7 @@ Needs `git`, `uv`, Python 3.11+, and the `claude` CLI authenticated through `ANT
 python bench/bench.py all --out /tmp/lfb                      # lab-forge (skills/lab-forge) vs bare agent, 2 repeats
 python bench/bench.py all --out /tmp/lfb --arm new=path/to/skill --arm old=skills/lab-forge
 python bench/bench.py all --out /tmp/lfb --cases churn --reps 1 --model claude-sonnet-5-5   # quick smoke
+python bench/bench.py all --out /tmp/lfb --arm lab=skills/lab-forge --arm pony=plugin:path/to/plugin --arm bare=
 python bench/bench.py all --out /tmp/lfb --arm decide=skills/lab-forge --arm main=skills/lab-forge --decide decide=hosted
 ```
 
@@ -39,6 +42,10 @@ When `claude -p` is not available, an orchestrating agent runs each step in a fr
 3. `bench.py pack --out DIR`: writes one blind review prompt per case and repeat. Run each in a new session.
    The reviewer saves `<key>.verdict.md` next to it.
 4. `bench.py report --out DIR`.
+
+An arm value `plugin:DIR` loads a Claude Code plugin in every session instead of deploying a skill: headless runs pass
+`--plugin-dir`, agent-driven prompts get its SessionStart hook output. With three or more arms, run `pack` and `report`
+once per pair with `--pair A,B`.
 
 If a hidden check turns out to be wrong, fix it and run `bench.py recheck --out DIR`; no session needs to rerun.
 

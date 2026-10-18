@@ -16,9 +16,11 @@ fix it, do not just report it.
    single user? Inline it.
 4. **Errors** - no bare/swallowed exceptions, no silent defaults, no retries or
    sleeps hiding a problem.
-5. **Style** - names, structure, logging and docstrings match the neighbours
+5. **By accident** - code that works only because of loop leftovers, dict order,
+   the cwd or the test data. Make it explicit or mark `# shortcut: <limit>`.
+6. **Style** - names, structure, logging and docstrings match the neighbours
    and {{canonical_path}}.
-6. **Config** - no new hard-coded thresholds, paths or dates; they go to {{params_file}}.
-7. **Checks** - tests/lint pass: {{test_command}}; DS change has its metric.
+7. **Config** - no new hard-coded thresholds, paths or dates; they go to {{params_file}}.
+8. **Checks** - tests/lint pass: {{test_command}}; DS change has its metric.
 
 Report to the user in at most 5 lines: what was trimmed and what remains risky.
