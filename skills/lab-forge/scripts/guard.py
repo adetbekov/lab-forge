@@ -134,8 +134,17 @@ def hook():
     return 0
 
 
-HOSTED = "https://api.liquid.ai/decisions/v1/systemone"
-DECIDE = {"backend": "off", "url": "http://localhost:11434/v1/systemone", "threshold": 0.5, "confidence": 0.7}
+MAX_SKILLS = 60  # d1-ultra answers a 60-way choice in ~0.5 s; 100 nears the 1.5 s timeout
+DECIDE = {"backend": "off", "threshold": 0.5, "confidence": 0.7}
+BACKENDS = {  # any endpoint that takes the /v1/systemone body works as `custom` with your own url, model and key
+    "hosted": {
+        "url": "https://api.liquid.ai/decisions/v1/systemone",
+        "model": "d1-ultra",
+        "key_env": "LIQUID_AI_API_KEY",
+    },
+    "local": {"url": "http://localhost:11434/v1/systemone", "model": "d1-omni:600m"},
+    "custom": {},
+}
 STOP_Q = (
     "Given the task and the agent's final report, is the task actually finished and verified, "
     "with nothing the user asked for left undone?"
@@ -148,28 +157,37 @@ MISSING = {
 }
 
 
+def lf_home():
+    return Path(os.environ.get("LAB_FORGE_HOME", Path.home() / ".lab-forge"))
+
+
 def decide_config():
-    path = Path(os.environ.get("LAB_FORGE_HOME", Path.home() / ".lab-forge")) / "decide.json"
     try:
-        return DECIDE | json.loads(path.read_text(encoding="utf-8"))
+        cfg = DECIDE | json.loads((lf_home() / "decide.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return DECIDE
+    return BACKENDS.get(cfg["backend"], {}) | {k: v for k, v in cfg.items() if v is not None}
+
+
+def decide_key(cfg):
+    """The user's own key: the env var named in `key_env`, else ~/.lab-forge/decide.key. Never printed."""
+    key = os.environ.get(cfg.get("key_env") or "", "")
+    if not key:
+        path = Path(cfg.get("key_file") or lf_home() / "decide.key").expanduser()
+        key = path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+    return key
 
 
 def ask(cfg, state, questions, timeout=1.5):
-    """Answers from the decision model; None when the backend is off or has no key. Errors raise."""
-    if cfg["backend"] == "hosted":
-        key = os.environ.get("LIQUID_AI_API_KEY")
-        if not key:
-            return None
-        url, model, headers = HOSTED, "d1-ultra", {"Authorization": f"Bearer {key}"}
-    elif cfg["backend"] == "local":
-        url, model, headers = cfg["url"], cfg.get("model", "d1-omni:600m"), {}
-    else:
+    """Answers from the decision model; None when the backend is off, unset or lacks its key. Errors raise."""
+    if cfg["backend"] not in BACKENDS or not cfg.get("url") or not cfg.get("model"):
         return None
-    body = json.dumps({"model": model, "state": state, "questions": questions}).encode()
-    req = urllib.request.Request(url, body, {"Content-Type": "application/json", **headers})
-    with urllib.request.urlopen(req, timeout=timeout) as res:
+    key = decide_key(cfg)
+    if cfg.get("key_env") and not key:
+        return None
+    headers = {"Content-Type": "application/json"} | ({"Authorization": f"Bearer {key}"} if key else {})
+    body = json.dumps({"model": cfg["model"], "state": state, "questions": questions}).encode()
+    with urllib.request.urlopen(urllib.request.Request(cfg["url"], body, headers), timeout=timeout) as res:
         return json.load(res)["answers"]
 
 
@@ -225,22 +243,59 @@ def decide_stop(event, cfg):
     return {"decision": "block", "reason": f"not verified: {why}"}
 
 
+def skill_meta(path):
+    """name and description from SKILL.md front matter; a folded `description: >` block is joined into one line."""
+    head = path.read_text(encoding="utf-8", errors="replace").split("---")
+    meta, key = {}, None
+    for line in (head[1] if len(head) > 2 else "").splitlines():
+        found = re.match(r"^(\w[\w-]*):\s*(.*)$", line)
+        if found:
+            key, value = found[1], found[2].strip()
+            meta[key] = "" if re.fullmatch(r"[>|][+-]?", value) else value
+        elif key and line[:1].isspace():
+            meta[key] = f"{meta[key]} {line.strip()}".strip()
+    clean = lambda v: v.strip().strip("\"'").strip()  # noqa: E731
+    return clean(meta.get("name") or path.parent.name), clean(meta.get("description", ""))[:300]
+
+
+def plugin_skill_dirs(cwd):
+    """(prefix, skills dir) of each enabled Claude Code plugin; its skills load as `plugin:skill`."""
+    claude = Path.home() / ".claude"
+    try:
+        installed = json.loads((claude / "plugins" / "installed_plugins.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    enabled = {}
+    for settings in (claude / "settings.json", Path(cwd) / ".claude" / "settings.json"):
+        try:
+            enabled |= json.loads(settings.read_text(encoding="utf-8")).get("enabledPlugins") or {}
+        except (OSError, ValueError, AttributeError):
+            pass
+    found = []
+    for plugin, entries in (installed.get("plugins") or {}).items():
+        for e in entries if enabled.get(plugin, True) else []:
+            if e.get("scope", "user") == "user" or Path(e.get("projectPath", "/-")).resolve() == Path(cwd).resolve():
+                found.append((plugin.split("@")[0] + ":", Path(e.get("installPath", "/-")) / "skills"))
+    return found
+
+
 def skills(cwd):
-    """name -> description of every installed skill the session can load."""
+    """name -> description of every installed skill the session can load, plugin skills included."""
     home, found = Path.home(), {}
-    for root in (Path(cwd) / ".claude", Path(cwd) / ".agents", home / ".claude", home / ".agents"):
-        for path in sorted((root / "skills").glob("*/SKILL.md")):
-            head = path.read_text(encoding="utf-8", errors="replace").split("---")
-            meta = dict(re.findall(r"^(name|description):\s*(.+)$", head[1] if len(head) > 2 else "", re.MULTILINE))
-            name = meta.get("name", path.parent.name).strip("\"' ")
-            found.setdefault(name, meta.get("description", "").strip("\"' ")[:300])
+    roots = [
+        ("", r / "skills") for r in (Path(cwd) / ".claude", Path(cwd) / ".agents", home / ".claude", home / ".agents")
+    ]
+    for prefix, root in roots + plugin_skill_dirs(cwd):
+        for path in sorted(root.glob("*/SKILL.md")):
+            name, desc = skill_meta(path)
+            found.setdefault(prefix + name, desc)
     return found
 
 
 def decide_skill(event, cfg):
     """Hint one skill when the model is confident it fits the prompt; else stay silent."""
     prompt = event.get("prompt") or ""
-    criteria = dict(list(skills(event.get("cwd") or ".").items())[:25])
+    criteria = dict(list(skills(event.get("cwd") or ".").items())[:MAX_SKILLS])
     if not prompt.strip() or not criteria:
         return None
     criteria["none"] = "No listed skill fits this request"
