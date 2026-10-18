@@ -65,7 +65,7 @@ on 2026-10-19.
 | C4 | `grill`: questions with real options | skill | description | JEB-1881 |
 | C5 | Verifier: proof before "done" | subagent + Stop hook | 0 | JEB-1880 |
 | C6 | Fresh docs: version pin, import check, docs lookup | guard + rule | 1 line | JEB-1879 |
-| C7 | Memory: `docs/wiki/` + `handoff` | skill | description | JEB-1882 |
+| C7 | Memory: repo `AGENTS.md` + `docs/wiki/` (rule 13), no extra layer | rule | 1 line | JEB-1882 |
 | C8 | Routing agents `quick` / `build` / `deep` | subagents | 0 | JEB-1880 |
 | C9 | `tune` | engine mode | 0 | JEB-1881 |
 | C10 | `self-review`: anti-slop check of own diff | skill | description | JEB-1878 |
@@ -92,7 +92,7 @@ same checks run from C5 and from `self-review`.
 | 10 | Fake or outdated tech | C6 pin and check existence | import resolves, package on index | non-existent imports = 0 |
 | 11 | Robotic, no conclusions | C1 "conclusion first", C5 rejects bare "Done!" | first line of final message is a verdict | blind clarity score |
 | 12 | Solves at once, tech debt grows | C2 deep = brainstorm → plan → execute | plan file present for deep | debt found after N iterations |
-| 13 | Forgets between sessions | C7 handoff note + wiki, C9 stored overrides | handoff file updated at Stop | questions repeated in session 2 |
+| 13 | Forgets between sessions | C7 facts in `AGENTS.md`/wiki, C9 stored overrides | override or fact line in diff | questions repeated in session 2 |
 | 14 | One strong model for all | C8 fixed `model`/`effort` per tier, escalate once on FAIL | tier logged per task | cost per solved task, escalation rate |
 | 15 | Rushes | C5 Iron Law: fresh test output before "done" | Stop hook runs project test command | false "done" rate |
 | 16 | Misses the big picture | C2 build/deep start with a project map | map step present in transcript | integration errors |
@@ -142,7 +142,7 @@ win.
 - Mandatory TDD: it conflicts with pain 4 and with exploratory ML work.
 - Full spec-kit or Kiro ceremony. We keep only "what does not change" and
   `[NEEDS CLARIFICATION]`.
-- Graph memory or MCP memory, until the JEB-1882 spike shows an A/B win.
+- Graph memory, MCP memory, code map: no A/B win (`bench/memory/results.md`).
 
 ## Open items
 
