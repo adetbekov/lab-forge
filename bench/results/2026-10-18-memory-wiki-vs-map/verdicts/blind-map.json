@@ -1,0 +1,10 @@
+{
+ "optuna-r1": {
+  "X": "map",
+  "Y": "wiki"
+ },
+ "optuna-r2": {
+  "X": "wiki",
+  "Y": "map"
+ }
+}
