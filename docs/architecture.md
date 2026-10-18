@@ -96,7 +96,7 @@ same checks run from C5 and from `self-review`.
 | 14 | One strong model for all | C8 fixed `model`/`effort` per tier, escalate once on FAIL | tier logged per task | cost per solved task, escalation rate |
 | 15 | Rushes | C5 Iron Law: fresh test output before "done" | Stop hook runs project test command | false "done" rate |
 | 16 | Misses the big picture | C2 build/deep start with a project map | map step present in transcript | integration errors |
-| 17 | No doubt, no curiosity | C1 statuses `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT` | status token in final message | concerns raised / planted issues |
+| 17 | No doubt, no curiosity | C1 closing line: what was skipped or not checked, and the risk | closing line in final message | concerns raised / planted issues |
 | 18 | Style differs every time | C1 + repo glossary, one style source | rule lint: no duplicate rule text | style variance across repeats |
 | 19 | Tuning in one phrase | C9 below | override line in diff after one phrase | tune cases applied from first phrase |
 

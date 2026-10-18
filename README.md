@@ -7,10 +7,10 @@ You run it once. It reads your machine and your repos, asks only what it could
 not detect, and writes a small set of rules, skills and commands that make the
 agent work the way you do. Later runs only tune what is already there.
 
-Status: **v0.2, experimental.** On the [bench](bench/README.md) it matches a plain
-agent on explicit requirements (16/16 hidden checks), writes 56% less code and
-wins the blind review 28.4 vs 25.0 of 30
-([report](bench/results/2026-10-18-v0.2-vs-bare/report.md)).
+Status: **v0.3, experimental.** On the [bench](bench/README.md) it solves every hidden check
+(8/8), changes 57% fewer lines than a plain agent and wins the blind review 3:1 against
+v0.2, 4:0 against [ponytail](https://github.com/DietrichGebert/ponytail) and 3:1 against
+a plain agent ([report](bench/results/2026-10-18-v0.3/report.md)).
 
 ## What it fixes
 

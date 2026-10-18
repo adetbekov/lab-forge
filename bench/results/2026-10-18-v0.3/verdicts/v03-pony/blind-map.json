@@ -1,0 +1,18 @@
+{
+ "encoders": {
+  "X": "v03",
+  "Y": "pony"
+ },
+ "rparse": {
+  "X": "pony",
+  "Y": "v03"
+ },
+ "churn": {
+  "X": "v03",
+  "Y": "pony"
+ },
+ "optuna": {
+  "X": "v03",
+  "Y": "pony"
+ }
+}
