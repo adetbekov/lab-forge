@@ -1,9 +1,23 @@
 """Aggregate per-step metrics and blind verdicts into report.md and runs.tsv."""
 
+import re
 from collections import defaultdict
-from statistics import mean
+from math import sqrt
+from statistics import mean, stdev
 
 CODE = ("success", "correctness", "practices", "optimality", "bloat", "scope")
+CODE_V04 = ("methodology", "tests")  # appended in v0.4; CODE and "code sum of 30" keep their old meaning
+WEIGHTS = {
+    "methodology": 2,
+    "tests": 2,
+    "correctness": 1.5,
+    "success": 1,
+    "scope": 1,
+    "practices": 1,
+    "optimality": 0.5,
+    "bloat": 0.5,
+}
+SWAP = ".swap"  # review key suffix: the same pair judged with X and Y swapped
 QUESTION = ("accuracy", "completeness", "conciseness", "usefulness")
 TSV = (
     "ws",
@@ -31,6 +45,17 @@ TSV = (
     "questions",
     "reply_words",
     "russian",
+    # v0.4 columns, appended so older runs.tsv files still line up
+    "mode",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "weighted_tokens",
+    "bare_pytest",
+    "mutants_killed",
+    "mutants_applied",
+    "n_files",
 )
 
 
@@ -43,6 +68,42 @@ def fmt(v, digits=1):
 def table(head, rows):
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     return "\n".join(lines + ["| " + " | ".join(fmt(c) for c in r) + " |" for r in rows])
+
+
+def parse(v):
+    if v == "—":
+        return None
+    if v in ("True", "False"):
+        return v == "True"
+    for kind in (int, float):
+        try:
+            return kind(v)
+        except ValueError:
+            pass
+    return v
+
+
+def read_tsv(text):
+    """Rows of a runs.tsv, typed back; file lists are not in the TSV, so `files` is None."""
+    head, *lines = text.splitlines()
+    cols = head.split("\t")
+    return [dict(zip(cols, map(parse, line.split("\t")))) | {"files": None} for line in lines if line]
+
+
+def n_files(r):
+    if r.get("files") is not None:
+        return len(r["files"])
+    if r.get("n_files") is not None:
+        return r["n_files"]
+    return int(r["loc_all"] + r["ai_loc"] > 0)  # runs.tsv before v0.4: no file count, changed lines tell
+
+
+def per_solved(rows, key, scale=1):
+    vals = [r.get(key) for r in rows if r["kind"] != "deploy"]
+    if not vals or None in vals:
+        return None
+    solved = sum(r["solved"] for r in rows if r["kind"] == "code")
+    return sum(vals) / scale / max(solved, 1)
 
 
 def objective(rows, arm):
@@ -72,14 +133,28 @@ def objective(rows, arm):
         "Ruff errors in changed files": sum(r["ruff_errors"] for r in code),
         "Imports that do not resolve": sum(r.get("bad_imports", 0) for r in code),
         "Questions in coding-step replies": sum(r["questions"] for r in code),
-        "Files written during read-only question": sum(len(r["files"]) for r in question),
+        "Files written during read-only question": sum(n_files(r) for r in question),
         "Tune phrase applied in next session": f"{sum(r['russian'] for r in question)}/{len(question)}",
         "Style stability across repeats (0-1)": stability(code),
+        "Tool calls per solved task": sum(r["tools"] for r in tasks) / max(solved, 1),
+        "Weighted tokens per solved task, k (cache read x0.1, write x1.25)": per_solved(mine, "weighted_tokens", 1000),
+        "Bare `pytest` green after step": ratio([r.get("bare_pytest") for r in code]),
+        "Mutants killed by the agent's tests": ratio(
+            [r.get("mutants_killed") for r in code], [r.get("mutants_applied") for r in code]
+        ),
     }
+
+
+def ratio(hits, totals=None):
+    """`k/n` over the steps that measured it, `—` when none did."""
+    pairs = [(h, 1 if totals is None else t) for h, t in zip(hits, totals or hits) if h is not None]
+    return f"{sum(h for h, _ in pairs)}/{sum(t for _, t in pairs)}" if pairs else None
 
 
 def stability(code):
     """Mean over (case, step) of Jaccard(files) x min/max(lines) between repeats."""
+    if any(r["files"] is None for r in code):
+        return None  # rebuilt from runs.tsv: file lists are not kept there
     groups = defaultdict(list)
     for r in code:
         groups[r["case"], r["step"]].append(r)
@@ -97,7 +172,6 @@ def stability(code):
 def judged(reviews, arms):
     """Per arm: mean of each criterion; also the per-case winners."""
     acc = {arm: defaultdict(list) for arm in arms}
-    winners = []
     for key, rv in sorted(reviews.items()):
         side_arm = rv["map"]
         for label, arm in side_arm.items():
@@ -105,15 +179,65 @@ def judged(reviews, arms):
             for step, val in s.items():
                 if isinstance(val, dict):
                     for crit, score in val.items():
-                        group = "code" if crit in CODE else "question"
+                        group = "code" if crit in CODE + CODE_V04 else "question"
                         acc[arm][f"{group}:{crit}"].append(score)
                 elif isinstance(val, (int, float)):
                     acc[arm][step].append(val)
+    return {arm: {k: mean(v) for k, v in d.items()} for arm, d in acc.items()}, winners(reviews)
+
+
+def winners(reviews):
+    """Winner per step for each case and repeat. If X/Y ran in both orders and the winner flips, it is a tie."""
+    groups = defaultdict(list)
+    for key, rv in sorted(reviews.items()):
         win = rv["scores"].get("winner", {})
-        winners.append(
-            (key, *[side_arm.get(win.get(k), "tie") for k in sorted(win, key=lambda k: (k == "overall", k))])
-        )
-    return {arm: {k: mean(v) for k, v in d.items()} for arm, d in acc.items()}, winners
+        groups[key.removesuffix(SWAP)].append({k: rv["map"].get(v, "tie") for k, v in win.items()})
+    rows, flips, pairs = [], 0, 0
+    for key, picks in groups.items():
+        row = []
+        for step in sorted(set().union(*picks), key=lambda k: (k == "overall", k)):
+            got = {p.get(step, "tie") for p in picks}
+            row.append(next(iter(got)) if len(got) == 1 else "tie")
+            if len(picks) > 1:
+                pairs, flips = pairs + 1, flips + (len(got) > 1)
+        rows.append((key, *row))
+    return rows, (flips, pairs)
+
+
+def weighted(scores):
+    """Weighted code score on the 1-5 scale; None unless every weighted criterion was scored."""
+    vals = [scores.get(f"code:{c}") for c in WEIGHTS]
+    if None in vals:
+        return None
+    return sum(w * v for w, v in zip(WEIGHTS.values(), vals)) / sum(WEIGHTS.values())
+
+
+def spread(xs):
+    xs = [x for x in xs if x is not None]
+    if not xs:
+        return None
+    if len(xs) == 1:
+        return f"{xs[0]:.2f} (n=1)"
+    return f"{mean(xs):.2f} ± {stdev(xs) / sqrt(len(xs)):.2f} (n={len(xs)})"
+
+
+def repeats(rows, reviews, arms):
+    """Mean ± standard error over repeats: each repeat is scored on its own, across all cases."""
+    reps = sorted({r["rep"] for r in rows} | {int(m[1]) for k in reviews if (m := re.search(r"-r(\d+)", k))})
+    per = {arm: defaultdict(list) for arm in arms}
+    for rep in reps:
+        mine = {k: rv for k, rv in reviews.items() if re.search(rf"-r{rep}(\W|$)", k)}
+        jd = judged(mine, arms)[0] if mine else {}
+        for arm in arms:
+            rr = [r for r in rows if r["arm"] == arm and r["rep"] == rep]
+            code = [r for r in rr if r["kind"] == "code"]
+            per[arm]["Tokens per solved task, k"].append(per_solved(rr, "tokens", 1000) if code else None)
+            per[arm]["Cost per solved task, $"].append(per_solved(rr, "cost_usd") if code else None)
+            if arm in jd:
+                per[arm]["code sum of 30"].append(sum(jd[arm].get(f"code:{c}", 0) for c in CODE))
+                per[arm]["weighted code score, 1-5"].append(weighted(jd[arm]))
+    names = list(per[arms[0]])
+    return table(["Metric", *arms], [(n, *[spread(per[a][n]) for a in arms]) for n in names])
 
 
 def reproduction(rows, reviews, arms, obj, jd):
@@ -168,27 +292,35 @@ def reproduction(rows, reviews, arms, obj, jd):
 
 
 def build(rows, reviews, arms):
-    obj = {arm: objective(rows, arm) for arm in arms}
-    jd, winners = judged(reviews, arms)
+    jd, (wins, (flips, pairs)) = judged(reviews, arms)
     out = [f"# lab-forge bench: {' vs '.join(arms)}", ""]
-    if len(arms) == 2 and rows:
-        repro = reproduction(rows, reviews, arms, obj, jd)
-        held = [r[3] for r in repro if r[3] is not None]
+    modes = sorted({r.get("mode") or "" for r in rows}) or [""]
+    for mode in modes:  # headless and agent-driven numbers never share a table
+        sub = [r for r in rows if (r.get("mode") or "") == mode]
+        tag = f" ({mode or 'mode not recorded'})" if len(modes) > 1 else ""
+        obj = {arm: objective(sub, arm) for arm in arms}
+        if len(arms) == 2 and sub:
+            repro = reproduction(sub, reviews, arms, obj, jd)
+            held = [r[3] for r in repro if r[3] is not None]
+            out += [
+                f"## First-round conclusions{tag}: {sum(held)}/{len(held)} reproduced",
+                "",
+                table(
+                    ["Conclusion", "First round", "This run", "Holds"],
+                    [(c, was, now, {True: "yes", False: "no", None: "—"}[ok]) for c, was, now, ok in repro],
+                ),
+                "",
+            ]
         out += [
-            f"## First-round conclusions: {sum(held)}/{len(held)} reproduced",
+            f"## Objective metrics{tag}",
             "",
-            table(
-                ["Conclusion", "First round", "This run", "Holds"],
-                [(c, was, now, {True: "yes", False: "no", None: "—"}[ok]) for c, was, now, ok in repro],
-            ),
+            table(["Metric", *arms], [(k, *[obj[a][k] for a in arms]) for k in obj[arms[0]]]),
+            "",
+            f"## Spread over repeats{tag} (mean ± SE)",
+            "",
+            repeats(sub, reviews, arms),
             "",
         ]
-    out += [
-        "## Objective metrics",
-        "",
-        table(["Metric", *arms], [(k, *[obj[a][k] for a in arms]) for k in obj[arms[0]]]),
-        "",
-    ]
     if reviews:
         keys = sorted({k for a in arms for k in jd[a]})
         out += [
@@ -197,13 +329,16 @@ def build(rows, reviews, arms):
             table(
                 ["Criterion", *arms],
                 [(k, *[jd[a].get(k) for a in arms]) for k in keys]
-                + [("**code sum of 30**", *[sum(jd[a].get(f"code:{c}", 0) for c in CODE) for a in arms])],
+                + [("**code sum of 30**", *[sum(jd[a].get(f"code:{c}", 0) for c in CODE) for a in arms])]
+                + [("**weighted code score, 1-5**", *[weighted(jd[a]) for a in arms])],
             ),
             "",
             "## Winners by case and repeat",
             "",
-            table(["case-repeat", "steps…, overall"], [(w[0], ", ".join(w[1:])) for w in winners]),
+            table(["case-repeat", "steps…, overall"], [(w[0], ", ".join(w[1:])) for w in wins]),
             "",
         ]
+        if pairs:
+            out += [f"X/Y order changed the winner in {flips} of {pairs} calls; those count as ties.", ""]
     tsv = "\t".join(TSV) + "\n" + "".join("\t".join(fmt(r.get(c), 3) for c in TSV) + "\n" for r in rows)
     return "\n".join(out), tsv

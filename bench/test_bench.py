@@ -1,9 +1,11 @@
 """Unit tests for the pure parts of the bench: python -m pytest bench"""
 
 import json
+import sys
 import types
+from pathlib import Path
 
-from report import build
+from report import build, read_tsv
 
 import bench
 from bench import is_ai, is_russian, ws_name
@@ -49,7 +51,7 @@ def row(arm, step, kind, **kw):
         "questions": 0,
         "reply_words": 10,
     }
-    return base | kw
+    return base | kw | {"n_files": len(kw.get("files", base["files"]))}
 
 
 def test_report_flags_reproduced_conclusions():
@@ -82,3 +84,95 @@ def test_session_sees_only_allowed_secrets(monkeypatch, tmp_path):
     assert not {"LIQUID_AI_API_KEY", "GITHUB_TOKEN", "S3_SECRET_ACCESS_KEY"} & set(seen)
     bench.claude("p", tmp_path, tmp_path, None, keys=["LIQUID_AI_API_KEY"])
     assert "LIQUID_AI_API_KEY" in seen and "GITHUB_TOKEN" not in seen
+
+
+def test_claude_returns_the_four_usage_fields(monkeypatch, tmp_path):
+    usage = {
+        "input_tokens": 10,
+        "output_tokens": 20,
+        "cache_read_input_tokens": 1000,
+        "cache_creation_input_tokens": 40,
+    }
+    out = json.dumps({"result": "ok", "usage": usage, "total_cost_usd": 0.5})
+    monkeypatch.setattr(bench, "sh", lambda *a, **k: types.SimpleNamespace(stdout=out, stderr=""))
+    _, tokens, _, _, cost, got = bench.claude("p", tmp_path, tmp_path, None)
+    assert tokens == 1070 and cost == 0.5 and got == usage
+
+
+def verdict(x, y, winner):
+    code = dict.fromkeys(("success", "correctness", "practices", "optimality", "bloat", "scope"), 4)
+    return {
+        "X": {"P1": code | {"methodology": x, "tests": x}},
+        "Y": {"P1": code | {"methodology": y, "tests": y}},
+        "winner": {"P1": winner, "overall": winner},
+    }
+
+
+def test_weighted_score_and_order_flip_is_a_tie():
+    reviews = {
+        "c-r1": {"map": {"X": "lab", "Y": "bare"}, "scores": verdict(5, 1, "X")},
+        "c-r1.swap": {"map": {"X": "bare", "Y": "lab"}, "scores": verdict(1, 5, "X")},
+    }
+    text, _ = build([], reviews, ["lab", "bare"])
+    assert "| **code sum of 30** | 24 | 24 |" in text  # the old sum ignores the new criteria
+    assert "| **weighted code score, 1-5** | 4.4 | 2.7 |" in text  # (2*5 + 2*5 + 5.5*4) / 9.5 vs (2 + 2 + 22) / 9.5
+    assert "| c-r1 | tie, tie |" in text
+    assert "X/Y order changed the winner in 2 of 2 calls" in text
+
+
+def test_modes_never_share_a_table():
+    rows = [row("lab", "P1", "code", solved=True, pytest=True, ruff_errors=0, mode="headless")]
+    rows += [row("bare", "P1", "code", solved=True, pytest=True, ruff_errors=0, mode="agent")]
+    text, _ = build(rows, {}, ["lab", "bare"])
+    assert "## Objective metrics (agent)" in text and "## Objective metrics (headless)" in text
+    assert "| Solved, hidden checks | 0/0 | 1/1 |" in text and "| Solved, hidden checks | 1/1 | 0/0 |" in text
+
+
+def test_report_rebuilds_from_runs_tsv():
+    rows = [
+        row("lab", "P1", "code", solved=True, pytest=True, ruff_errors=0, bad_imports=0, cost_usd=0.25),
+        row("bare", "P1", "code", solved=False, pytest=False, ruff_errors=2, bad_imports=1, bare_pytest=False),
+        row("lab", "P3", "question", russian=True, files=[]),
+    ]
+    rows[0] |= {"mutants_killed": 1, "mutants_applied": 3, "bare_pytest": True}
+    rows[1] |= {"mutants_killed": 0, "mutants_applied": 2}
+    text, tsv = build(rows, {}, ["lab", "bare"])
+    back = read_tsv(tsv)
+    for r, kind in zip(back, ("code", "code", "question")):
+        r["kind"] = kind
+    again, tsv_again = build(back, {}, ["lab", "bare"])
+    assert tsv_again == tsv
+    assert again.replace("| Style stability across repeats (0-1) | — | — |", "") == text.replace(
+        "| Style stability across repeats (0-1) | — | — |", ""
+    )
+    assert "| Mutants killed by the agent's tests | 1/3 | 0/2 |" in text
+    assert "| Bare `pytest` green after step | 1/1 | 0/1 |" in text
+
+
+def test_committed_v03_report_rebuilds_line_for_line(tmp_path):
+    res = Path(bench.BENCH) / "results" / "2026-10-18-v0.3"
+    args = types.SimpleNamespace(
+        out=tmp_path, runs=res / "runs.tsv", verdicts=[res / "verdicts" / "v03-bare"], pair=["v03", "bare"]
+    )
+    new = iter(bench.rebuild(args).splitlines())
+    old = (res / "v03-bare.md").read_text().splitlines()
+    assert all(line in new for line in old)  # every committed line, in order; new rows may sit between them
+
+
+def test_mutant_killed_survived_or_not_reached(tmp_path):
+    (tmp_path / "area.py").write_text("import math\n\n\ndef side(a):\n    return math.sqrt(a)\n")
+    mu = {
+        "id": "m",
+        "breaks": "sqrt is off by one",
+        "run": "-c 'import area; area.side(4)'",
+        "patch": "import math\n_s = math.sqrt\n\n\ndef sqrt(x):\n    hit()\n    return _s(x) + 1\n\n\nmath.sqrt = sqrt\n",
+    }
+    py, b = sys.executable, object.__new__(bench.Bench)
+    biting = "from area import side\n\n\ndef test_side():\n    assert side(9) == 3\n"
+    (tmp_path / "test_a.py").write_text(biting)
+    assert b.mutant(py, tmp_path, mu, ["test_a.py"]) == "killed"
+    (tmp_path / "test_a.py").write_text("from area import side\n\n\ndef test_side():\n    assert side(9) > 0\n")
+    assert b.mutant(py, tmp_path, mu, ["test_a.py"]) == "survived"
+    (tmp_path / "test_a.py").write_text("def test_nothing():\n    assert True\n")
+    assert b.mutant(py, tmp_path, mu, ["test_a.py"]) == "survived"  # the entry point reaches it, the tests do not
+    assert b.mutant(py, tmp_path, mu | {"run": "-c pass"}, ["test_a.py"]) == "n/a"

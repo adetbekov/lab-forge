@@ -24,3 +24,106 @@ prompt = "From now on, answer my questions about this project in Russian."
 id = "P3"
 kind = "question"
 prompt = "If the LLM keeps returning malformed JSON, what exactly happens step by step until the caller gets an error? And how do I add a new golden receipt to the eval? Answer briefly with file:line references."
+
+# Hand-written breaks for "do the tests bite"; see the note in cases/churn/case.toml. Both wrap the validator of
+# every pydantic model the project defines, so they apply whether the parser calls model_validate_json,
+# model_validate or the constructor.
+[[mutants]]
+id = "last-item-dropped"
+steps = ["P1", "P2"]
+run = "-m rparse.eval"
+breaks = "a validated model loses the last element of every list of models it holds (two or more)"
+patch = '''
+from pydantic import BaseModel
+
+_init_subclass = BaseModel.__pydantic_init_subclass__.__func__
+
+
+def drop_last(obj):
+    if isinstance(obj, BaseModel):
+        for name, value in vars(obj).items():
+            if isinstance(value, list) and len(value) > 1 and all(isinstance(v, BaseModel) for v in value):
+                hit()
+                obj.__dict__[name] = value = value[:-1]
+            for v in value if isinstance(value, list) else [value]:
+                drop_last(v)
+    return obj
+
+
+class Validator:
+    def __init__(self, inner):
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def validate_python(self, *args, **kwargs):
+        return drop_last(self._inner.validate_python(*args, **kwargs))
+
+    def validate_json(self, *args, **kwargs):
+        return drop_last(self._inner.validate_json(*args, **kwargs))
+
+
+@classmethod
+def __pydantic_init_subclass__(cls, **kwargs):
+    _init_subclass(cls, **kwargs)
+    cls.__pydantic_validator__ = Validator(cls.__pydantic_validator__)
+
+
+BaseModel.__pydantic_init_subclass__ = __pydantic_init_subclass__
+'''
+
+[[mutants]]
+id = "invalid-output-accepted"
+steps = ["P2"]
+run = "-m rparse.eval"
+breaks = "schema validation errors are swallowed: well-formed JSON that fails the schema becomes an unvalidated model"
+patch = '''
+import json
+
+from pydantic import BaseModel, ValidationError
+
+_init_subclass = BaseModel.__pydantic_init_subclass__.__func__
+
+
+class Validator:
+    def __init__(self, cls, inner):
+        self._cls, self._inner = cls, inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def _lenient(self, validate, data, args, kwargs):
+        hit()
+        try:
+            return validate(data, *args, **kwargs)
+        except ValidationError as err:
+            try:
+                raw = json.loads(data) if isinstance(data, (str, bytes, bytearray)) else data
+            except ValueError:
+                raise err from None  # malformed JSON still fails as before
+            if not isinstance(raw, dict):
+                raise
+            made = self._cls.model_construct(**raw)
+            target = kwargs.get("self_instance")
+            if target is None:
+                return made
+            for attr in ("__dict__", "__pydantic_fields_set__", "__pydantic_extra__", "__pydantic_private__"):
+                object.__setattr__(target, attr, getattr(made, attr))
+            return target
+
+    def validate_python(self, data, *args, **kwargs):
+        return self._lenient(self._inner.validate_python, data, args, kwargs)
+
+    def validate_json(self, data, *args, **kwargs):
+        return self._lenient(self._inner.validate_json, data, args, kwargs)
+
+
+@classmethod
+def __pydantic_init_subclass__(cls, **kwargs):
+    _init_subclass(cls, **kwargs)
+    cls.__pydantic_validator__ = Validator(cls, cls.__pydantic_validator__)
+
+
+BaseModel.__pydantic_init_subclass__ = __pydantic_init_subclass__
+'''

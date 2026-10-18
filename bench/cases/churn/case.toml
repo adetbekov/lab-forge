@@ -24,3 +24,91 @@ prompt = "From now on, answer my questions about this project in Russian."
 id = "P3"
 kind = "question"
 prompt = "How is the data split into train / validation / test, what guards against leakage, and where do I change the gradient boosting hyperparameters? Answer briefly with file:line references."
+
+# Hand-written breaks for "do the tests bite": each patch is loaded as sitecustomize while the step's tests run
+# (subprocesses too). `hit()` marks that project code reached it; `run` is the entry point used to tell
+# "the tests never reach this code" (survived) from "nothing reaches it" (n/a). Patches only wrap library calls,
+# so they apply to any agent's code.
+[[mutants]]
+id = "test-rows-in-fit"
+steps = ["P1", "P2"]
+run = "-m churn.train"
+breaks = "every train_test_split puts half of the held-out rows into the train part; sizes stay the same"
+patch = '''
+import numpy as np
+import pandas as pd
+import sklearn.model_selection as ms
+
+_split = ms.train_test_split
+
+
+def train_test_split(*arrays, **kw):
+    hit()
+    out = _split(*arrays, **kw)
+    for i in range(0, len(out), 2):
+        train, test = out[i], out[i + 1]
+        k = min(len(train), len(test)) // 2
+        if hasattr(train, "iloc"):
+            out[i] = pd.concat([test.iloc[:k], train.iloc[k:]])
+        else:
+            out[i] = np.concatenate([np.asarray(test)[:k], np.asarray(train)[k:]])
+    return out
+
+
+ms.train_test_split = train_test_split
+'''
+
+[[mutants]]
+id = "config-ignored"
+steps = ["P2"]
+run = "-m churn.train"
+breaks = "the models fit with default hyperparameters (random_state kept) while get_params still shows the configured ones"
+patch = '''
+import functools
+
+from sklearn.ensemble import GradientBoostingClassifier, HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+
+for cls in (GradientBoostingClassifier, HistGradientBoostingClassifier, LogisticRegression):
+
+    def wrap(fit):
+        @functools.wraps(fit)
+        def fit_defaults(self, *args, **kwargs):
+            given = self.get_params(deep=False)
+            default = {k: v for k, v in type(self)().get_params(deep=False).items() if k != "random_state"}
+            if any(given[k] != v for k, v in default.items()):
+                hit()
+            self.set_params(**default)
+            try:
+                return fit(self, *args, **kwargs)
+            finally:
+                self.set_params(**{k: given[k] for k in default})
+
+        return fit_defaults
+
+    cls.fit = wrap(cls.fit)
+'''
+
+[[mutants]]
+id = "scores-inverted"
+steps = ["P1", "P2"]
+run = "-m churn.train"
+breaks = "predict_proba of both model families returns the class columns swapped"
+patch = '''
+import functools
+
+from sklearn.ensemble import GradientBoostingClassifier, HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+
+for cls in (GradientBoostingClassifier, HistGradientBoostingClassifier, LogisticRegression):
+
+    def wrap(predict_proba):
+        @functools.wraps(predict_proba)
+        def inverted(self, X):
+            hit()
+            return predict_proba(self, X)[:, ::-1]
+
+        return inverted
+
+    cls.predict_proba = wrap(cls.predict_proba)
+'''

@@ -22,9 +22,10 @@ Score each of X and Y from 1 to 5 (5 best).
 - For the question: accuracy (check at least 5 refs), completeness, conciseness, usefulness.
 - clarity: do the final messages lead with a conclusion and read like a person, not a dump of numbers?
 - questions: did it ask, defer or leave work for the user only when warranted? Deferring an explicit requirement while the user is unavailable is a defect.
+- Also for every coding step: methodology (every fitted step, such as scaling, encoding, calibration, threshold, early stopping or hyperparameter search, learns on rows it is not evaluated on; no leakage by time or group; the same seed and split for all models compared; 5 if the step fits and evaluates nothing), tests (would a test fail if the behaviour it names broke? In a scratch copy, break one function the step wrote, rerun the tests and say what happened; a test that only echoes config or input is a defect. Also run bare `pytest` from the snapshot root, not only `python -m pytest`).
 
 Output: a compact markdown table of scores, then the most important concrete defects for each side (with file:line), then a winner per step and overall with a 2-4 sentence justification. Under 600 words. End with exactly one fenced json block in this shape (one key per coding step and question step id):
 
 ```json
-{{"X": {{"P1": {{"success": 4, "correctness": 4, "practices": 4, "optimality": 4, "bloat": 4, "scope": 4}}, "P3": {{"accuracy": 4, "completeness": 4, "conciseness": 4, "usefulness": 4}}, "clarity": 4, "questions": 4}}, "Y": {{"...": "same shape"}}, "winner": {{"P1": "X", "P3": "tie", "overall": "Y"}}}}
+{{"X": {{"P1": {{"success": 4, "correctness": 4, "practices": 4, "optimality": 4, "bloat": 4, "scope": 4, "methodology": 4, "tests": 4}}, "P3": {{"accuracy": 4, "completeness": 4, "conciseness": 4, "usefulness": 4}}, "clarity": 4, "questions": 4}}, "Y": {{"...": "same shape"}}, "winner": {{"P1": "X", "P3": "tie", "overall": "Y"}}}}
 ```
