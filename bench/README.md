@@ -3,7 +3,8 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest results: [`results/2026-10-18-v0.2-vs-bare`](results/2026-10-18-v0.2-vs-bare/report.md),
+Latest results: [`results/2026-10-18-decide-vs-main`](results/2026-10-18-decide-vs-main/notes.md),
+[`results/2026-10-18-v0.2-vs-bare`](results/2026-10-18-v0.2-vs-bare/report.md),
 [`results/2026-10-18-layers-vs-v0.1`](results/2026-10-18-layers-vs-v0.1/notes.md),
 [`results/2026-10-18-layers-vs-v0.1-headless`](results/2026-10-18-layers-vs-v0.1-headless/notes.md),
 [`results/2026-10-18-memory-wiki-vs-map`](results/2026-10-18-memory-wiki-vs-map/report.md) ([summary](memory/results.md));
@@ -19,6 +20,7 @@ Needs `git`, `uv`, Python 3.11+, and the `claude` CLI authenticated through `ANT
 python bench/bench.py all --out /tmp/lfb                      # lab-forge (skills/lab-forge) vs bare agent, 2 repeats
 python bench/bench.py all --out /tmp/lfb --arm new=path/to/skill --arm old=skills/lab-forge
 python bench/bench.py all --out /tmp/lfb --cases churn --reps 1 --model claude-sonnet-5-5   # quick smoke
+python bench/bench.py all --out /tmp/lfb --arm decide=skills/lab-forge --arm main=skills/lab-forge --decide decide=hosted
 ```
 
 The result is `/tmp/lfb/report.md` and `/tmp/lfb/runs.tsv`. Only those two files and the verdicts go into

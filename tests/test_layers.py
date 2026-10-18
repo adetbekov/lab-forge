@@ -3,6 +3,8 @@
 import json
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "lab-forge" / "scripts"
@@ -105,3 +107,99 @@ def test_scope_and_imports(tmp_path):
     assert res.returncode == 1 and "README.md" in res.stdout and "ok.py" not in res.stdout
     res = script("guard.py", "imports", str(proj), "src/ok.py", home=tmp_path)
     assert res.returncode == 1 and "does not resolve: no_such_pkg_xyz" in res.stdout
+
+
+def fake_d1(answers, delay=0):
+    """Local /v1/systemone stand-in: replies with `answers`, keeps every request body."""
+    seen = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            threading.Event().wait(delay)
+            out = json.dumps({"answers": answers}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{server.server_port}/v1/systemone", seen
+
+
+def decide(home, mode, event, backend="local", url=None):
+    (home / ".lab-forge").mkdir(exist_ok=True)
+    (home / ".lab-forge" / "decide.json").write_text(json.dumps({"backend": backend, "url": url}))
+    res = script("guard.py", "decide", mode, home=home, stdin=json.dumps(event))
+    assert res.returncode == 0
+    return json.loads(res.stdout) if res.stdout.strip() else None
+
+
+def test_decide_stop_blocks_unverified_done_once(tmp_path):
+    log = tmp_path / "t.jsonl"
+    lines = [
+        {"message": {"role": "user", "content": "old task"}},
+        {"message": {"role": "user", "content": "Add a retry to fetch() and test it."}},
+        {"message": {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}},
+        {"message": {"role": "assistant", "content": [{"type": "text", "text": "Done!"}]}},
+    ]
+    log.write_text("\n".join(map(json.dumps, lines)))
+    event = {"hook_event_name": "Stop", "transcript_path": str(log), "stop_hook_active": False}
+    url, seen = fake_d1({"done": {"noul": 0.02}, "missing": {"choice": "verification", "confidence": 0.9}})
+    out = decide(tmp_path, "stop", event, url=url)
+    assert out["decision"] == "block" and out["reason"].startswith("not verified: ")
+    assert seen[0]["model"] == "d1-omni:600m" and seen[0]["questions"]["done"]["type"] == "noul"
+    assert "Add a retry" in seen[0]["state"] and "old task" not in seen[0]["state"]
+    assert decide(tmp_path, "stop", event | {"stop_hook_active": True}, url=url) is None
+    url, _ = fake_d1({"done": {"noul": 0.87}, "missing": {"choice": "verification"}})
+    assert decide(tmp_path, "stop", event, url=url) is None
+
+
+def test_decide_fails_open(tmp_path):
+    event = {"transcript_path": "", "last_assistant_message": "Done", "prompt": "x"}
+    url, seen = fake_d1({"done": {"noul": 0.0}}, delay=3)
+    assert decide(tmp_path, "stop", event | {"transcript_path": str(tmp_path)}, url=url) is None
+    assert decide(tmp_path, "stop", event, url="http://127.0.0.1:9/v1/systemone") is None
+    assert decide(tmp_path, "stop", event, backend="hosted") is None  # no LIQUID_AI_API_KEY
+    assert decide(tmp_path, "stop", event, backend="off", url=url) is None and not seen
+
+
+def test_decide_skill_hints_only_when_confident(tmp_path):
+    for name in ("grill", "triage"):
+        (tmp_path / ".claude" / "skills" / name).mkdir(parents=True)
+        (tmp_path / ".claude" / "skills" / name / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: d {name}\n---\n"
+        )
+    event = {"hook_event_name": "UserPromptSubmit", "prompt": "Ask me questions first", "cwd": str(tmp_path)}
+    url, seen = fake_d1({"skill": {"choice": "grill", "confidence": 0.93}})
+    out = decide(tmp_path, "skill", event, url=url)
+    assert out["hookSpecificOutput"]["additionalContext"] == "lab-forge: load skill grill"
+    assert set(seen[0]["questions"]["skill"]["criteria"]) == {"grill", "triage", "none"}
+    url, _ = fake_d1({"skill": {"choice": "grill", "confidence": 0.6}})
+    assert decide(tmp_path, "skill", event, url=url) is None
+    url, _ = fake_d1({"skill": {"choice": "none", "confidence": 0.99}})
+    assert decide(tmp_path, "skill", event, url=url) is None
+
+
+def test_install_decide_adds_hooks_next_to_others(tmp_path):
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    verifier = {"hooks": [{"type": "command", "command": "verify.sh"}]}
+    settings.write_text(json.dumps({"hooks": {"Stop": [verifier]}}))
+    script("install_global.py", "install", "--harness", "claude", home=tmp_path)
+    assert json.loads(settings.read_text())["hooks"]["Stop"] == [verifier]
+    res = script("install_global.py", "install", "--harness", "claude,codex", "--decide", "hosted", home=tmp_path)
+    assert "sent to api.liquid.ai" in res.stdout
+    hooks = json.loads(settings.read_text())["hooks"]
+    assert hooks["Stop"][0] == verifier and hooks["Stop"][1]["hooks"][0]["command"].endswith("decide stop")
+    assert hooks["UserPromptSubmit"][0]["hooks"][0]["command"].endswith("decide skill")
+    assert "decide stop" in (tmp_path / ".codex" / "hooks.json").read_text()
+    script("install_global.py", "install", "--decide", "hosted", home=tmp_path)
+    assert len(json.loads(settings.read_text())["hooks"]["Stop"]) == 2
+    script("install_global.py", "install", "--decide", "off", home=tmp_path)
+    hooks = json.loads(settings.read_text())["hooks"]
+    assert hooks["Stop"] == [verifier] and "UserPromptSubmit" not in hooks

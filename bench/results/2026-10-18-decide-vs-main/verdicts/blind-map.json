@@ -1,0 +1,34 @@
+{
+ "churn-r1": {
+  "X": "decide",
+  "Y": "main"
+ },
+ "churn-r2": {
+  "X": "decide",
+  "Y": "main"
+ },
+ "encoders-r1": {
+  "X": "main",
+  "Y": "decide"
+ },
+ "encoders-r2": {
+  "X": "main",
+  "Y": "decide"
+ },
+ "optuna-r1": {
+  "X": "main",
+  "Y": "decide"
+ },
+ "optuna-r2": {
+  "X": "decide",
+  "Y": "main"
+ },
+ "rparse-r1": {
+  "X": "main",
+  "Y": "decide"
+ },
+ "rparse-r2": {
+  "X": "decide",
+  "Y": "main"
+ }
+}

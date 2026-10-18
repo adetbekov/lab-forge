@@ -129,6 +129,14 @@ Copies follow `overrides.md`: `tune.py` runs `sync` after a global tune.
 hand: `guard.py branch`, `guard.py scope` (globs in `.lab-forge/scope`),
 `guard.py imports` (unresolved imports, installed versions to read docs for).
 
+Decision hooks, opt-in, off by default: `install --decide hosted|local [--decide-url URL]` writes
+`~/.lab-forge/decide.json` and adds `guard.py decide stop` (Stop: blocks an unverified "done" once,
+"not verified: <what is missing>") and `guard.py decide skill` (UserPromptSubmit: "load skill X" at
+confidence ≥ 0.7) for Claude Code and Codex, next to any other Stop hook. **`hosted` sends each prompt,
+task and final reply to api.liquid.ai (d1-ultra, `LIQUID_AI_API_KEY`); `local` sends them only to your
+URL.** Timeout 1.5 s; any error does nothing. `--decide off` removes the hooks. Local d1-omni-600M
+cannot judge `stop` or `skill` (JEB-1889 eval), so use it only for plumbing tests.
+
 Smoke test after install: `scripts/smoke.py`. Each harness CLI found on PATH
 answers `lab-forge ping` with the global and repo canaries, and Claude Code and
 Codex must not land a commit on `main`. IDE-only harnesses print the same check
