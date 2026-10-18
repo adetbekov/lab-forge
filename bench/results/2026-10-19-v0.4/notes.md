@@ -32,7 +32,7 @@ also writes into `~/.lab-forge/` (core, defaults, guard, tune, install script) a
 | Conflicts | none |
 
 Repo `AGENTS.md` goes from 55 to 37 lines. Not yet run against Yeldos's real v0.1 install; `--apply`
-there waits for his go-ahead.
+there waits for Yeldos's go-ahead.
 
 Nit: the state log line reads `2026-10-18 upgrade 0.1 -> 0.4.0` on 2026-10-19 (local date of the
 machine's timezone vs UTC); harmless.
