@@ -1,10 +1,15 @@
-"""Tool checks behind the global rules: branch, scope, imports. Stdlib only.
+"""Tool checks behind the global rules: branch, scope, imports, decide. Stdlib only.
 
 Usage:
     python guard.py branch [DIR]            # exit 1 on the default branch
     python guard.py scope [DIR] [--base REF] # exit 1 if changed files are outside .lab-forge/scope
     python guard.py imports [DIR] [FILE...]  # exit 1 if an import does not resolve in the project Python
     python guard.py hook                     # PreToolUse hook: JSON on stdin, exit 2 blocks the call
+    python guard.py decide stop|skill        # Stop / UserPromptSubmit hook backed by a decision model
+
+`decide` reads $LAB_FORGE_HOME/decide.json: {"backend": "off" | "hosted" | "local", "url": ...}.
+`hosted` sends the task and reply to api.liquid.ai (d1-ultra, $LIQUID_AI_API_KEY); `local` sends them only
+to the given /v1/systemone URL. Any error, timeout or missing key does nothing (fail-open).
 
 A repo opts out of the branch rule with `git config lab-forge.allowMain true`.
 """
@@ -12,9 +17,11 @@ A repo opts out of the branch rule with `git config lab-forge.allowMain true`.
 import ast
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch", "edit", "write"}
@@ -127,6 +134,195 @@ def hook():
     return 0
 
 
+MAX_SKILLS = 60  # d1-ultra answers a 60-way choice in ~0.5 s; 100 nears the 1.5 s timeout
+DECIDE = {"backend": "off", "threshold": 0.5, "confidence": 0.7}
+BACKENDS = {  # any endpoint that takes the /v1/systemone body works as `custom` with your own url, model and key
+    "hosted": {
+        "url": "https://api.liquid.ai/decisions/v1/systemone",
+        "model": "d1-ultra",
+        "key_env": "LIQUID_AI_API_KEY",
+    },
+    "local": {"url": "http://localhost:11434/v1/systemone", "model": "d1-omni:600m"},
+    "custom": {},
+}
+STOP_Q = (
+    "Given the task and the agent's final report, is the task actually finished and verified, "
+    "with nothing the user asked for left undone?"
+)
+MISSING = {
+    "verification": "no fresh command output, test run or check shows that it works",
+    "requirement": "part of what the user asked for is not done",
+    "errors": "an error, failing test or open problem is mentioned and not fixed",
+    "evidence": "the report claims success without saying what was run or changed",
+}
+
+
+def lf_home():
+    return Path(os.environ.get("LAB_FORGE_HOME", Path.home() / ".lab-forge"))
+
+
+def decide_config():
+    try:
+        cfg = DECIDE | json.loads((lf_home() / "decide.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return DECIDE
+    return BACKENDS.get(cfg["backend"], {}) | {k: v for k, v in cfg.items() if v is not None}
+
+
+def decide_key(cfg):
+    """The user's own key: the env var named in `key_env`, else ~/.lab-forge/decide.key. Never printed."""
+    key = os.environ.get(cfg.get("key_env") or "", "")
+    if not key:
+        path = Path(cfg.get("key_file") or lf_home() / "decide.key").expanduser()
+        key = path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+    return key
+
+
+def ask(cfg, state, questions, timeout=1.5):
+    """Answers from the decision model; None when the backend is off, unset or lacks its key. Errors raise."""
+    if cfg["backend"] not in BACKENDS or not cfg.get("url") or not cfg.get("model"):
+        return None
+    key = decide_key(cfg)
+    if cfg.get("key_env") and not key:
+        return None
+    headers = {"Content-Type": "application/json"} | ({"Authorization": f"Bearer {key}"} if key else {})
+    body = json.dumps({"model": cfg["model"], "state": state, "questions": questions}).encode()
+    with urllib.request.urlopen(urllib.request.Request(cfg["url"], body, headers), timeout=timeout) as res:
+        return json.load(res)["answers"]
+
+
+def transcript(path):
+    """Latest user prompt and the assistant text after it, from a Claude Code or Codex JSONL transcript."""
+    task, reply = "", ""
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except (OSError, TypeError):
+        return task, reply
+    for line in lines:
+        try:
+            item = json.loads(line)
+            msg = item.get("message") or item.get("payload") or {}
+            content = msg.get("content")
+        except (ValueError, AttributeError):
+            continue
+        text = content if isinstance(content, str) else ""
+        if isinstance(content, list):  # tool results carry no text part, so they never count as a prompt
+            parts = [c.get("text", "") for c in content if isinstance(c, dict) and "text" in str(c.get("type"))]
+            text = "\n".join(parts)
+        if text and msg.get("role") == "user":
+            task, reply = text, ""
+        elif text and msg.get("role") == "assistant":
+            reply = text
+    return task, reply
+
+
+def decide_stop(event, cfg):
+    """Block "done" when the model doubts it; once per turn, so the agent is never stuck."""
+    if event.get("stop_hook_active"):
+        return None
+    task, reply = transcript(event.get("transcript_path"))
+    reply = event.get("last_assistant_message") or reply
+    if not task or not reply:
+        return None
+    state = f"Task: {task[:2000]}\n\nAgent final report: {reply[-2000:]}"
+    answers = ask(
+        cfg,
+        state,
+        {
+            "done": {"type": "noul", "instructions": STOP_Q},
+            "missing": {
+                "type": "choice",
+                "instructions": "What is missing before it counts as done?",
+                "criteria": MISSING,
+            },
+        },
+    )
+    if not answers or answers["done"]["noul"] >= cfg["threshold"]:
+        return None
+    why = MISSING.get(answers.get("missing", {}).get("choice"), MISSING["verification"])
+    return {"decision": "block", "reason": f"not verified: {why}"}
+
+
+def skill_meta(path):
+    """name and description from SKILL.md front matter; a folded `description: >` block is joined into one line."""
+    head = path.read_text(encoding="utf-8", errors="replace").split("---")
+    meta, key = {}, None
+    for line in (head[1] if len(head) > 2 else "").splitlines():
+        found = re.match(r"^(\w[\w-]*):\s*(.*)$", line)
+        if found:
+            key, value = found[1], found[2].strip()
+            meta[key] = "" if re.fullmatch(r"[>|][+-]?", value) else value
+        elif key and line[:1].isspace():
+            meta[key] = f"{meta[key]} {line.strip()}".strip()
+    clean = lambda v: v.strip().strip("\"'").strip()  # noqa: E731
+    return clean(meta.get("name") or path.parent.name), clean(meta.get("description", ""))[:300]
+
+
+def plugin_skill_dirs(cwd):
+    """(prefix, skills dir) of each enabled Claude Code plugin; its skills load as `plugin:skill`."""
+    claude = Path.home() / ".claude"
+    try:
+        installed = json.loads((claude / "plugins" / "installed_plugins.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    enabled = {}
+    for settings in (claude / "settings.json", Path(cwd) / ".claude" / "settings.json"):
+        try:
+            enabled |= json.loads(settings.read_text(encoding="utf-8")).get("enabledPlugins") or {}
+        except (OSError, ValueError, AttributeError):
+            pass
+    found = []
+    for plugin, entries in (installed.get("plugins") or {}).items():
+        for e in entries if enabled.get(plugin, True) else []:
+            if e.get("scope", "user") == "user" or Path(e.get("projectPath", "/-")).resolve() == Path(cwd).resolve():
+                found.append((plugin.split("@")[0] + ":", Path(e.get("installPath", "/-")) / "skills"))
+    return found
+
+
+def skills(cwd):
+    """name -> description of every installed skill the session can load, plugin skills included."""
+    home, found = Path.home(), {}
+    roots = [
+        ("", r / "skills") for r in (Path(cwd) / ".claude", Path(cwd) / ".agents", home / ".claude", home / ".agents")
+    ]
+    for prefix, root in roots + plugin_skill_dirs(cwd):
+        for path in sorted(root.glob("*/SKILL.md")):
+            name, desc = skill_meta(path)
+            found.setdefault(prefix + name, desc)
+    return found
+
+
+def decide_skill(event, cfg):
+    """Hint one skill when the model is confident it fits the prompt; else stay silent."""
+    prompt = event.get("prompt") or ""
+    criteria = dict(list(skills(event.get("cwd") or ".").items())[:MAX_SKILLS])
+    if not prompt.strip() or not criteria:
+        return None
+    criteria["none"] = "No listed skill fits this request"
+    q = {
+        "type": "choice",
+        "instructions": "Which skill should the agent load for this user request?",
+        "criteria": criteria,
+    }
+    answers = ask(cfg, f"User request: {prompt[:3000]}", {"skill": q})
+    pick = (answers or {}).get("skill") or {}
+    if pick.get("choice") in (None, "none") or pick.get("confidence", 0) < cfg["confidence"]:
+        return None
+    context = f"lab-forge: load skill {pick['choice']}"
+    return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": context}}
+
+
+def decide(mode):
+    try:
+        event = json.load(sys.stdin)
+        out = {"stop": decide_stop, "skill": decide_skill}[mode](event, decide_config())
+    except Exception:  # noqa: BLE001  fail-open: a timeout or a broken model never blocks the agent
+        return 0
+    if out:
+        print(json.dumps(out))
+    return 0
+
+
 def main():
     cmd, rest = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
     cwd = rest[0] if rest and not rest[0].startswith("-") and cmd != "imports" else "."
@@ -141,6 +337,8 @@ def main():
         return check_imports(cwd, files)
     if cmd == "hook":
         return hook()
+    if cmd == "decide" and rest[:1] in (["stop"], ["skill"]):
+        return decide(rest[0])
     print(__doc__)
     return 2
 

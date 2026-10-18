@@ -7,6 +7,8 @@ Harnesses with no global file (Cursor, Copilot in VS Code) get the copy in the r
 
 Usage:
     python install_global.py install [--harness claude,codex,copilot,antigravity] [--no-hooks]
+                                     [--decide off|hosted|local|custom] [--decide-url URL]
+                                     [--decide-model NAME] [--decide-key-env VAR]
     python install_global.py repo DIR     # fallback: principles block in DIR/AGENTS.md
     python install_global.py sync         # re-render every block after an edit or a tune
     python install_global.py check [DIR]  # exit 1 on drift or a missing block
@@ -22,10 +24,18 @@ import shutil
 import sys
 from pathlib import Path
 
+import guard
+
 ENGINE = Path(__file__).resolve().parent.parent
 BEGIN, END = "<!-- lab-forge:begin", "<!-- lab-forge:end -->"
 BLOCK = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", re.DOTALL)
 HOOK_MATCH = {"claude": "Edit|Write|MultiEdit|NotebookEdit|Bash", "codex": ".*"}
+DECIDE_HOOKS = {"Stop": "stop", "UserPromptSubmit": "skill"}
+DECIDE_OFFER = (
+    'decide: off. Optional: a decision model checks "done?" and hints skills; bring your own endpoint and key '
+    "(hosted d1-ultra, local d1-omni or any /v1/systemone API): install --decide hosted|local|custom, "
+    "see references/generation.md section 8"
+)
 
 
 def lf_home():
@@ -111,15 +121,58 @@ def put_settings(path, kind, hooks):
         ]
     elif hooks:
         python = getattr(sys, "_base_executable", sys.executable)  # a project venv can disappear
-        command = f'"{python}" "{lf_home() / "hooks" / "guard.py"}" hook'
+        command = f'"{python}" "{lf_home() / "hooks" / "guard.py"}"'
         entries = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
         entries[:] = [e for e in entries if "lab-forge" not in json.dumps(e)]
-        entries.append({"matcher": HOOK_MATCH[kind], "hooks": [{"type": "command", "command": command}]})
+        entries.append({"matcher": HOOK_MATCH[kind], "hooks": [{"type": "command", "command": f"{command} hook"}]})
+        on = decide_backend() != "off"
+        for event, mode in DECIDE_HOOKS.items():  # next to other Stop hooks (the verifier), never instead
+            entries = data["hooks"].setdefault(event, [])
+            entries[:] = [e for e in entries if not re.search(r"guard\.py\W+decide", json.dumps(e))]
+            if on:
+                entries.append({"hooks": [{"type": "command", "command": f"{command} decide {mode}", "timeout": 5}]})
+            if not entries:
+                del data["hooks"][event]
     else:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print(f"settings: {path}")
+
+
+def decide_backend():
+    try:
+        return json.loads(read(lf_home() / "decide.json") or "{}").get("backend", "off")
+    except ValueError:
+        return "off"
+
+
+def put_decide(backend, url=None, model=None, key_env=None):
+    """Write decide.json; None keeps what is there. Prints where the data goes and whether the key is there."""
+    if backend is not None:
+        cfg = {"backend": backend, "url": url, "model": model, "key_env": key_env}
+        if backend == "custom" and not (url and model):
+            sys.exit("--decide custom needs --decide-url and --decide-model")
+        cfg = {k: v for k, v in cfg.items() if v}
+        (lf_home() / "decide.json").write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    cfg = guard.decide_config()
+    if cfg["backend"] == "off":
+        print(DECIDE_OFFER)
+        return
+    host = re.sub(r"^\w+://([^/]+).*", r"\1", cfg.get("url") or "?")
+    print(f"decide: {cfg['backend']} {cfg.get('model')}; each prompt, task and final reply is sent to {host}")
+    key_file, env = lf_home() / "decide.key", cfg.get("key_env")
+    if env and os.environ.get(env):
+        print(f"decide key: found in ${env}")
+    elif guard.decide_key(cfg):
+        print(f"decide key: found in {cfg.get('key_file') or key_file}")
+    elif env:
+        print(
+            f"decide key: missing. Add your own: export {env}=... where the agent starts, or write it to "
+            f"{key_file} (chmod 600). The hooks stay silent until then."
+        )
+    else:
+        print(f"decide key: none sent. If the endpoint needs one, write it to {key_file} (chmod 600).")
 
 
 def put_engine(skills_dir):
@@ -139,7 +192,7 @@ def put_engine(skills_dir):
     print(f"skill: {dest}")
 
 
-def install(harnesses, hooks):
+def install(harnesses, hooks, decide=None, decide_url=None, decide_model=None, decide_key_env=None):
     lf, (_, canary, installed, repos) = lf_home(), state()
     canary = canary or f"LF-{secrets.token_hex(4)}"
     harnesses = list(dict.fromkeys([*installed, *harnesses]))  # a partial rerun keeps the others
@@ -149,6 +202,7 @@ def install(harnesses, hooks):
     if not (lf / "overrides.md").exists():
         (lf / "overrides.md").write_text("# Overrides\n", encoding="utf-8")
     shutil.copy(ENGINE / "scripts" / "guard.py", lf / "hooks" / "guard.py")
+    put_decide(decide, decide_url, decide_model, decide_key_env)
     save_state(canary, harnesses, repos)
     for skills_dir in {SKILL_DIRS[h] for h in harnesses if h in SKILL_DIRS}:
         put_engine(skills_dir)
@@ -187,13 +241,17 @@ def main():
     p.add_argument("dir", nargs="?", type=Path)
     p.add_argument("--harness", default="claude,codex,copilot,antigravity")
     p.add_argument("--no-hooks", action="store_true")
+    p.add_argument("--decide", choices=["off", *guard.BACKENDS], help="decision hooks backend (default: keep)")
+    p.add_argument("--decide-url", help="/v1/systemone endpoint (local and custom)")
+    p.add_argument("--decide-model", help="model name the endpoint expects")
+    p.add_argument("--decide-key-env", help="env var that holds your key; the key itself never goes on the CLI")
     args = p.parse_args()
     if args.action == "install":
         names = [h.strip() for h in args.harness.split(",") if h.strip()]
         unknown = set(names) - set(targets())
         if unknown:
             p.error(f"unknown harness: {', '.join(sorted(unknown))}")
-        return install(names, not args.no_hooks)
+        return install(names, not args.no_hooks, args.decide, args.decide_url, args.decide_model, args.decide_key_env)
     if args.action == "repo":
         if not args.dir:
             p.error("repo needs DIR")
