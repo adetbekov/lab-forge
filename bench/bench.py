@@ -7,8 +7,9 @@
     python bench/bench.py prepare --out /tmp/lfb                # then, for agent-driven runs:
     python bench/bench.py next --out /tmp/lfb                   #   prompts to run in fresh sessions
     python bench/bench.py record --out /tmp/lfb WS STEP --tokens N --tools N --ms N --reply FILE
-    python bench/bench.py pack --out /tmp/lfb                   #   blind X/Y review prompts
+    python bench/bench.py pack --out /tmp/lfb                   #   blind X/Y review prompts, both orders
     python bench/bench.py report --out /tmp/lfb                 #   report.md + runs.tsv
+    python bench/bench.py rebuild --out /tmp/re --runs R/runs.tsv --verdicts R/verdicts/a-b --pair a,b
 
 See bench/README.md for the protocol and the metric-to-pain map.
 """
@@ -21,6 +22,7 @@ import json
 import os
 import random
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -30,6 +32,7 @@ from itertools import combinations
 from pathlib import Path
 
 import tomllib
+from report import SWAP, build, read_tsv
 
 BENCH = Path(__file__).resolve().parent
 AI_FILES = [
@@ -93,6 +96,31 @@ multica CLI, no subagents, no network, no git push, no PRs. Ignore any style ins
 plugins (e.g. "caveman" terse mode), except the SessionStart context given below. {mode}
 """
 PLUGIN = "plugin:"  # arm value `plugin:DIR`: a Claude Code plugin loaded every session, no deploy step
+USAGE = {  # claude -p usage field -> runs.tsv column, weight in "weighted tokens" (cache reads are ~0.1x input)
+    "input_tokens": ("input_tokens", 1),
+    "output_tokens": ("output_tokens", 1),
+    "cache_read_input_tokens": ("cache_read_tokens", 0.1),
+    "cache_creation_input_tokens": ("cache_write_tokens", 1.25),
+}
+MUTANT_HEAD = '''"""bench mutant, loaded as sitecustomize: {breaks}"""
+import os
+import sys
+
+_ROOT = os.environ["BENCH_MUTANT_ROOT"]
+
+
+def hit():
+    """Mark the mutant as reached when project code or its tests are on the stack."""
+    f = sys._getframe(1)
+    while f:
+        path = f.f_code.co_filename  # "<frozen ...>" and "<string>" are not files
+        if os.path.isabs(path) and os.path.realpath(path).startswith(_ROOT):
+            open(os.environ["BENCH_MUTANT_HIT"], "a").close()
+            return
+        f = f.f_back
+
+
+'''
 
 
 SESSION_ENV = (
@@ -258,14 +286,19 @@ class Bench:
             git(ws, "add", "-A", env=env)
             return git(ws, "write-tree", env=env).strip()
 
-    def record(self, ws, step_id, tokens, tools, ms, reply, cost=None):
+    def record(self, ws, step_id, tokens, tools, ms, reply, cost=None, usage=None, mode="agent"):
         st, steps = self.steps(ws)
         step = next(s for s in steps if s["id"] == step_id)
         case, root = self.cases[st["case"]], self.out / "ws" / ws
         prev = st["steps"][st["order"][-1]]["tree"] if st["order"] else st["base_tree"]
         tree = self.snapshot(root)
         m = {"tokens": tokens, "tools": tools, "ms": ms, "cost_usd": cost, "tree": tree, "kind": step["kind"]}
+        m["mode"] = mode
+        if usage:
+            m |= {col: usage.get(field) for field, (col, _) in USAGE.items()}
+            m["weighted_tokens"] = sum(w * (usage.get(field) or 0) for field, (_, w) in USAGE.items())
         m |= self.diff_metrics(root, prev, tree, case.get("scope"))
+        m["n_files"] = len(m["files"])
         branch = git(root, "branch", "--show-current").strip()
         m["committed"] = git(root, "status", "--porcelain").strip() == ""
         m["on_main"] = branch == "main" and git(root, "rev-parse", "HEAD").strip() != st["head"]
@@ -322,7 +355,8 @@ class Bench:
             git(copy, "-c", "user.name=bench", "-c", "user.email=bench@example.com", "commit", "-qm", "snapshot")
             hidden = sh([py, str(case["dir"] / "check.py"), step_id], cwd=copy, check=False, timeout=1800)
             tests = [f for f in files if re.search(r"(^|/)test_[^/]*\.py$", f) and (copy / f).exists()]
-            pytest = None
+            pytest = bare = None
+            mutants = {}
             if case["pytest"] == "all" or tests:
                 args = [] if case["pytest"] == "all" else tests
                 pytest = (
@@ -334,6 +368,13 @@ class Bench:
                     ).returncode
                     == 0
                 )
+                if (root / ".venv" / "bin" / "pytest").exists():  # no `-m`: the project must set its own path
+                    cmd = [str(root / ".venv" / "bin" / "pytest"), "-q", "-x", "-p", "no:cacheprovider", *args]
+                    bare = sh(cmd, cwd=copy, check=False, timeout=1800).returncode == 0
+                if pytest:  # a red suite cannot show that it notices a break
+                    for mu in case.get("mutants", []):
+                        if step_id in mu["steps"]:
+                            mutants[mu["id"]] = self.mutant(py, copy, mu, args)
             py_files = [f for f in files if f.endswith(".py")]
             ruff_new = max(ruff_count(py, copy, py_files) - ruff_count(py, before, py_files), 0)
             bad_imports = unresolved_imports(py, copy, [f for f in py_files if (copy / f).exists()])
@@ -344,7 +385,33 @@ class Bench:
             "pytest": pytest,
             "ruff_errors": ruff_new,
             "bad_imports": bad_imports,
+            "bare_pytest": bare,
+            "mutants": mutants,
+            "mutants_killed": sum(v == "killed" for v in mutants.values()) if mutants else None,
+            "mutants_applied": sum(v != "n/a" for v in mutants.values()) if mutants else None,
         }
+
+    def mutant(self, py, copy, mu, args):
+        """Run the step's tests with one hand-written break patched in through sitecustomize.
+
+        killed: the tests fail and reached the patch; survived: they pass, yet the tests or the case's
+        own entry point reach the patched code; n/a: nothing reaches it, so it says nothing about the tests.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "sitecustomize.py").write_text(MUTANT_HEAD.format(breaks=mu["breaks"]) + mu["patch"])
+            hit = Path(tmp) / "hit"
+            env = {**os.environ, "PYTHONPATH": tmp, "BENCH_MUTANT_HIT": str(hit)}
+            env["BENCH_MUTANT_ROOT"] = os.path.realpath(copy) + os.sep
+            cmd = [py, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *args]
+            red = sh(cmd, cwd=copy, env=env, check=False, timeout=1800).returncode != 0
+            if hit.exists():
+                return "killed" if red else "survived"
+            if red:
+                return "n/a"  # failed without reaching the patch: not this mutant's doing
+            run = shutil.copytree(copy, Path(tmp) / "run")  # the entry point may write outputs
+            env["BENCH_MUTANT_ROOT"] = os.path.realpath(run) + os.sep
+            sh([py, *shlex.split(mu["run"])], cwd=run, env=env, check=False, timeout=1800)
+            return "survived" if hit.exists() else "n/a"
 
     def recheck(self):
         """Re-run checks on every recorded coding step, e.g. after fixing a case's check.py."""
@@ -368,67 +435,67 @@ class Bench:
         prompts = []
         for name, case in self.cases.items():
             for rep in range(1, self.cfg["reps"] + 1):
-                key = f"{name}-r{rep}" + (f"-{'-'.join(pair)}" if pair else "")
-                order = arms[:]
-                random.Random(hashlib.sha256(f"{self.cfg['seed']}{key}".encode()).digest()).shuffle(order)
-                rdir = self.out / "review" / key
-                shutil.rmtree(rdir, ignore_errors=True)
-                answers = {}
-                for label, arm in zip("XY", order):
-                    ws = self.ws_name(name, arm, rep)
-                    st, root, side = self.state(ws), self.out / "ws" / ws, rdir / label
-                    side.mkdir(parents=True)
-                    for s in case["steps"]:
-                        logs = self.out / "logs" / ws
-                        if s["kind"] == "code":
-                            shutil.copy(logs / f"{s['id']}.patch", side / f"{s['id']}.patch")
-                            shutil.copy(logs / f"{s['id']}.reply.md", side / f"{s['id']}.reply.md")
-                        if s["kind"] == "question":
-                            answers[label] = (logs / f"{s['id']}.reply.md").read_text()
-                    last_code = [s["id"] for s in case["steps"] if s["kind"] == "code"][-1]
-                    snap = side / "snapshot"
-                    snap.mkdir()
-                    sh(
-                        [
-                            "git",
-                            "-C",
-                            str(root),
-                            "archive",
-                            "-o",
-                            str(side / "snap.tar"),
-                            st["steps"][last_code]["tree"],
-                        ]
-                    )
-                    sh(["tar", "-xf", str(side / "snap.tar"), "-C", str(snap)])
-                    (side / "snap.tar").unlink()
-                    for p in sorted(snap.rglob("*"), reverse=True):
-                        if is_ai(str(p.relative_to(snap))):
-                            shutil.rmtree(p) if p.is_dir() else p.unlink()
-                    (snap / ".venv").symlink_to(root / ".venv")
-                (rdir.parent / f"{key}.map.json").write_text(json.dumps(dict(zip("XY", order))))
-                text = (
-                    (BENCH / "rubric.md")
-                    .read_text()
-                    .format(
-                        dir=rdir,
-                        base=self.out / "src" / name if case["kind"] == "existing" else "none (new project)",
-                        title=case["title"],
-                        review=case["review"].replace("BASE", str(self.out / "src" / name)),
-                        requests="\n".join(
-                            f'- {s["id"]}: "{s["prompt"]}"' for s in case["steps"] if s["kind"] != "tune"
-                        ),
-                        answer_x=answers.get("X", ""),
-                        answer_y=answers.get("Y", ""),
-                    )
-                )
-                (rdir.parent / f"{key}.prompt.md").write_text(text)
-                prompts.append(rdir.parent / f"{key}.prompt.md")
+                base = f"{name}-r{rep}" + (f"-{'-'.join(pair)}" if pair else "")
+                first = arms[:]
+                random.Random(hashlib.sha256(f"{self.cfg['seed']}{base}".encode()).digest()).shuffle(first)
+                for key, order in ((base, first), (base + SWAP, first[::-1])):  # position bias: judge both orders
+                    prompts.append(self.pack_one(key, name, case, rep, order))
         return prompts
+
+    def pack_one(self, key, name, case, rep, order):
+        rdir = self.out / "review" / key
+        shutil.rmtree(rdir, ignore_errors=True)
+        answers = {}
+        for label, arm in zip("XY", order):
+            ws = self.ws_name(name, arm, rep)
+            st, root, side = self.state(ws), self.out / "ws" / ws, rdir / label
+            side.mkdir(parents=True)
+            for s in case["steps"]:
+                logs = self.out / "logs" / ws
+                if s["kind"] == "code":
+                    shutil.copy(logs / f"{s['id']}.patch", side / f"{s['id']}.patch")
+                    shutil.copy(logs / f"{s['id']}.reply.md", side / f"{s['id']}.reply.md")
+                if s["kind"] == "question":
+                    answers[label] = (logs / f"{s['id']}.reply.md").read_text()
+            last_code = [s["id"] for s in case["steps"] if s["kind"] == "code"][-1]
+            snap = side / "snapshot"
+            snap.mkdir()
+            sh(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "archive",
+                    "-o",
+                    str(side / "snap.tar"),
+                    st["steps"][last_code]["tree"],
+                ]
+            )
+            sh(["tar", "-xf", str(side / "snap.tar"), "-C", str(snap)])
+            (side / "snap.tar").unlink()
+            for p in sorted(snap.rglob("*"), reverse=True):
+                if is_ai(str(p.relative_to(snap))):
+                    shutil.rmtree(p) if p.is_dir() else p.unlink()
+            (snap / ".venv").symlink_to(root / ".venv")
+        (rdir.parent / f"{key}.map.json").write_text(json.dumps(dict(zip("XY", order))))
+        text = (
+            (BENCH / "rubric.md")
+            .read_text()
+            .format(
+                dir=rdir,
+                base=self.out / "src" / name if case["kind"] == "existing" else "none (new project)",
+                title=case["title"],
+                review=case["review"].replace("BASE", str(self.out / "src" / name)),
+                requests="\n".join(f'- {s["id"]}: "{s["prompt"]}"' for s in case["steps"] if s["kind"] != "tune"),
+                answer_x=answers.get("X", ""),
+                answer_y=answers.get("Y", ""),
+            )
+        )
+        (rdir.parent / f"{key}.prompt.md").write_text(text)
+        return rdir.parent / f"{key}.prompt.md"
 
     # ---- report -----------------------------------------------------------------------------------------------------
     def report(self, pair=None):
-        from report import build
-
         arms = pair or list(self.cfg["arms"])
         rows = []
         for ws in self.workspaces():
@@ -442,18 +509,48 @@ class Bench:
         reviews = {}
         for path in (self.out / "review").glob("*.verdict.md"):
             key = path.name.removesuffix(".verdict.md")
-            block = re.findall(r"```json\s*(\{.*?\})\s*```", path.read_text(), re.DOTALL)
             amap = json.loads((self.out / "review" / f"{key}.map.json").read_text())
-            if block and set(amap.values()) <= set(arms):
-                reviews[key] = {
-                    "map": json.loads((self.out / "review" / f"{key}.map.json").read_text()),
-                    "scores": json.loads(block[-1]),
-                }
+            if (scores := verdict(path)) and set(amap.values()) <= set(arms):
+                reviews[key] = {"map": amap, "scores": scores}
         text, tsv = build(rows, reviews, arms)
         suffix = f"-{'-'.join(pair)}" if pair else ""
         (self.out / f"report{suffix}.md").write_text(text)
         (self.out / f"runs{suffix}.tsv").write_text(tsv)
         return text
+
+
+def verdict(path):
+    block = re.findall(r"```json\s*(\{.*?\})\s*```", path.read_text(), re.DOTALL)
+    return json.loads(block[-1]) if block else None
+
+
+def rebuild(args):
+    """Rebuild a report from a committed runs.tsv and verdicts/<pair>/ folders, e.g. to diff it against the original.
+
+    Verdict folders hold `<case>-r<rep>.md` plus `blind-map.json` ({case: {X: arm, Y: arm}}); the review key is
+    `<case>-r<rep>-<folder>`, as `pack --pair` names it.
+    """
+    cases = load_cases()
+    rows = read_tsv(Path(args.runs).read_text())
+    for r in rows:
+        steps = {s["id"]: s["kind"] for s in cases[r["case"]]["steps"]}
+        r["kind"] = steps.get(r["step"], "deploy")
+    arms = args.pair or list(dict.fromkeys(r["arm"] for r in rows))
+    reviews = {}
+    for vdir in map(Path, args.verdicts or []):
+        amap = json.loads((vdir / "blind-map.json").read_text())
+        for path in sorted(vdir.glob("*-r*.md")):
+            key = path.stem.removesuffix(SWAP)
+            side = amap[key.rsplit("-r", 1)[0]]
+            side = {"X": side["Y"], "Y": side["X"]} if path.stem.endswith(SWAP) else side
+            if (scores := verdict(path)) and set(side.values()) <= set(arms):
+                reviews[f"{key}-{vdir.name}" + SWAP * path.stem.endswith(SWAP)] = {"map": side, "scores": scores}
+    text, tsv = build([r for r in rows if r["arm"] in arms], reviews, arms)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "report.md").write_text(text)
+    (out / "runs.tsv").write_text(tsv)
+    return text
 
 
 def prepare(args):
@@ -569,6 +666,7 @@ def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=(), plugin
         data.get("num_turns", 0),
         data.get("duration_ms", 0),
         data.get("total_cost_usd"),
+        {k: usage.get(k) for k in USAGE},
     )
 
 
@@ -579,7 +677,7 @@ def run(args):
         def one(item):
             ws, step = item
             arm = b.state(ws)["arm"]
-            reply, tok, turns, ms, cost = claude(
+            reply, tok, turns, ms, cost, usage = claude(
                 b.prompt(ws, step, "claude"),
                 b.out / "ws" / ws,
                 b.out / "home" / ws,
@@ -588,7 +686,7 @@ def run(args):
                 keys=["LIQUID_AI_API_KEY"] if b.cfg.get("decide", {}).get(arm) == "hosted" else [],
                 plugin=b.cfg["arms"][arm].removeprefix(PLUGIN) if b.cfg["arms"][arm].startswith(PLUGIN) else None,
             )
-            b.record(ws, step["id"], tok, turns, ms, reply, cost)
+            b.record(ws, step["id"], tok, turns, ms, reply, cost, usage, mode="headless")
             print(ws, step["id"], tok, "tokens")
 
         with ThreadPoolExecutor(args.jobs) as pool:
@@ -606,7 +704,7 @@ def run(args):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("all", "prepare", "run", "next", "record", "recheck", "pack", "report"):
+    for name in ("all", "prepare", "run", "next", "record", "recheck", "pack", "report", "rebuild"):
         s = sub.add_parser(name)
         s.add_argument("--out", required=True)
         if name in ("all", "prepare"):
@@ -615,7 +713,7 @@ def main():
                 action="append",
                 help="NAME=SKILL_DIR, NAME=plugin:PLUGIN_DIR, empty = bare agent (default: lab=skills/lab-forge, bare=)",
             )
-            s.add_argument("--reps", type=int, default=2)
+            s.add_argument("--reps", type=int, default=3)
             s.add_argument("--cases", nargs="*")
             s.add_argument("--seed", type=int, default=1877)
             s.add_argument("--python", default="3.12")
@@ -624,9 +722,9 @@ def main():
             )
         if name in ("all", "run"):
             s.add_argument("--model", default=None)
-            s.add_argument("--judge-model", default=None)
+            s.add_argument("--judge-model", default="claude-fable-5-1", help="another model line than the agents'")
             s.add_argument("--jobs", type=int, default=4)
-        if name in ("pack", "report"):
+        if name in ("pack", "report", "rebuild"):
             s.add_argument("--pair", type=lambda v: v.split(","), help="A,B: the two arms to compare")
         if name == "record":
             s.add_argument("ws")
@@ -635,6 +733,12 @@ def main():
             s.add_argument("--tools", type=int, default=0)
             s.add_argument("--ms", type=int, default=0)
             s.add_argument("--reply", help="file with the agent's final message (default: the one the prompt names)")
+            s.add_argument("--cost", type=float, help="session cost, $, if the driver reports it")
+            for field, (col, _) in USAGE.items():
+                s.add_argument(f"--{col.replace('_', '-')}", dest=field, type=int, help=f"usage.{field}")
+        if name == "rebuild":
+            s.add_argument("--runs", required=True, help="a committed runs.tsv")
+            s.add_argument("--verdicts", nargs="*", help="verdicts/<pair>/ folders with blind-map.json")
     args = p.parse_args()
     sys.path.insert(0, str(BENCH))
     if args.cmd in ("all", "prepare"):
@@ -652,7 +756,9 @@ def main():
     elif args.cmd == "record":
         b = Bench(args.out)
         reply = Path(args.reply or b.reply_file(args.ws, args.step)).read_text()
-        m = b.record(args.ws, args.step, args.tokens, args.tools, args.ms, reply)
+        usage = {k: getattr(args, k) for k in USAGE}
+        usage = usage if any(v is not None for v in usage.values()) else None
+        m = b.record(args.ws, args.step, args.tokens, args.tools, args.ms, reply, args.cost, usage)
         print(json.dumps({k: v for k, v in m.items() if k not in ("files", "tree")}))
     elif args.cmd == "recheck":
         Bench(args.out).recheck()
@@ -660,6 +766,8 @@ def main():
         print("\n".join(map(str, Bench(args.out).pack(args.pair))))
     elif args.cmd == "report":
         print(Bench(args.out).report(args.pair))
+    elif args.cmd == "rebuild":
+        print(rebuild(args))
 
 
 if __name__ == "__main__":
