@@ -55,6 +55,11 @@ DEPLOY = {
     "from the audit limited to AI-setup files) is pre-approved, do not ask questions. Do not change "
     "application code. Docs and commits in English.",
 }
+DECIDE = {  # the user asks for decision hooks at deploy, as a real user would
+    "hosted": " Also turn on the lab-forge decision hooks with the hosted backend; I accept that prompts and replies "
+    "go to api.liquid.ai.",
+    "local": " Also turn on the lab-forge decision hooks with the local backend.",
+}
 REPLY = {
     "deploy": "Follow the skill workflow and commit the result (one commit). When finished, reply with: files "
     "created or changed with line counts, and a 3-line summary.",
@@ -214,6 +219,7 @@ class Bench:
         kind = step["kind"]
         request = (
             DEPLOY[case["kind"]].format(skill=skill, brief=case.get("brief", ""))
+            + DECIDE.get(self.cfg.get("decide", {}).get(st["arm"]), "")
             if kind == "deploy"
             else step["prompt"]
         )
@@ -467,9 +473,6 @@ def prepare(args):
                     continue
                 shutil.rmtree(root, ignore_errors=True)
                 (out / "home" / ws).mkdir(parents=True, exist_ok=True)
-                if arm in decide:  # install_global picks it up at P0 and adds the decide hooks
-                    (out / "home" / ws / ".lab-forge").mkdir(exist_ok=True)
-                    (out / "home" / ws / ".lab-forge" / "decide.json").write_text(json.dumps({"backend": decide[arm]}))
                 if case["kind"] == "existing":
                     shutil.copytree(src, root, ignore=shutil.ignore_patterns(".git"), symlinks=True)
                 else:
@@ -583,7 +586,9 @@ def main():
             s.add_argument("--cases", nargs="*")
             s.add_argument("--seed", type=int, default=1877)
             s.add_argument("--python", default="3.12")
-            s.add_argument("--decide", action="append", help="ARM=hosted|local: decision hooks backend for that arm")
+            s.add_argument(
+                "--decide", action="append", help="ARM=hosted|local: that arm's deploy asks for decision hooks"
+            )
         if name in ("all", "run"):
             s.add_argument("--model", default=None)
             s.add_argument("--judge-model", default=None)
