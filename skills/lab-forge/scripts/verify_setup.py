@@ -1,14 +1,17 @@
-"""Verify a lab-forge-generated setup: budgets, links, duplicated rules, skill frontmatter.
+"""Verify a lab-forge-generated setup: budgets, links, duplicated rules, skill frontmatter, profile block.
 
 Stdlib only. Checks files listed in .lab-forge/state.md when present; otherwise checks
-the usual agent files and warns that ownership is unknown.
+the usual agent files and warns that ownership is unknown. `--engine` checks the engine's
+own templates instead: the core and repo template budgets and the profile block shas.
 
 Usage:
     python verify_setup.py <project> [--skip-skill NAME ...]
+    python verify_setup.py --engine
 Exit code 1 if any check fails.
 """
 
 import argparse
+import hashlib
 import re
 import sys
 from collections import defaultdict
@@ -19,8 +22,11 @@ POINTERS_EXTRA = [".cursor/rules/main.mdc"]
 SKILL_DIRS = [".claude/skills", ".github/skills", ".agents/skills", ".cursor/skills"]
 COMMAND_GLOBS = [".github/prompts/*.prompt.md", ".claude/commands/*.md"]
 BUDGET = {"rules": 60, "pointer": 5, "skill": 120, "command": 10, "state": 60}
+CORE_BUDGET, ALWAYS_LOADED_BUDGET = 30, 60  # core alone; core plus the repo template
 LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(?:#[^)]*)?\)")
-GLOBAL_COPY = re.compile(r"<!-- lab-forge:begin.*?<!-- lab-forge:end -->", re.S)
+GLOBAL_COPY = re.compile(r"<!-- lab-forge:begin(?! profile ).*?<!-- lab-forge:end -->", re.S)
+PROFILE = re.compile(r"<!-- lab-forge:begin profile (\S+) sha=(\w*) -->\n(.*?)<!-- lab-forge:end -->", re.S)
+ENGINE = Path(__file__).resolve().parent.parent
 
 
 def lines(path):
@@ -50,12 +56,66 @@ def prose(path):
     return re.sub(r"`[^`]*`", "", text)
 
 
+def sha(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+
+def engine_profiles():
+    """Profile name -> repo block body, as shipped in references/profiles/."""
+    found = {}
+    for path in sorted((ENGINE / "references" / "profiles").glob("*.md")):
+        for name, _, body in PROFILE.findall(path.read_text(encoding="utf-8")):
+            found[name] = body
+    return found
+
+
+def check_engine():
+    """The always-loaded budget and profile block shas, on the engine's own templates."""
+    errors = []
+    templates = ENGINE / "assets" / "templates"
+    core = (templates / "core.md").read_text(encoding="utf-8").splitlines()
+    repo = (templates / "rules.md").read_text(encoding="utf-8").splitlines()
+    if len(core) > CORE_BUDGET:
+        errors.append(f"core.md: {len(core)} lines, budget {CORE_BUDGET}")
+    if len(core) + len(repo) > ALWAYS_LOADED_BUDGET:
+        errors.append(f"core.md + rules.md: {len(core) + len(repo)} lines, budget {ALWAYS_LOADED_BUDGET}")
+    for path in sorted((ENGINE / "references" / "profiles").glob("*.md")):
+        blocks = PROFILE.findall(path.read_text(encoding="utf-8"))
+        if len(blocks) != 1:
+            errors.append(f"{path.name}: expected one profile block, found {len(blocks)}")
+        for name, digest, body in blocks:
+            if digest != sha(body):
+                errors.append(f"{path.name}: block sha={digest}, content sha is {sha(body)}")
+    return errors, []
+
+
+def check_profile(project, rule_files, state_text):
+    """Profile blocks are copied verbatim: the marker sha matches the text and the engine's profile."""
+    errors, shipped, present = [], engine_profiles(), set()
+    for rel in rule_files:
+        for name, digest, body in PROFILE.findall((project / rel).read_text(encoding="utf-8")):
+            present.add(name)
+            if name not in shipped:
+                errors.append(f"{rel}: unknown profile block '{name}'")
+            elif digest != sha(body):
+                errors.append(f"{rel}: profile block '{name}' was edited by hand (sha={digest}, text {sha(body)})")
+            elif body != shipped[name]:
+                errors.append(f"{rel}: profile block '{name}' differs from references/profiles (sha {sha(body)} "
+                              f"vs {sha(shipped[name])}); copy it verbatim")
+    named = re.search(r"^- Domain profile:(.*)$", state_text, re.M)
+    for name in shipped:
+        if named and re.search(rf"\b{re.escape(name)}\b", named[1]) and name not in present:
+            errors.append(f"state.md names profile '{name}' but no rules file has its block")
+    return errors
+
+
 def check(project, skip_skills):
     project = Path(project).resolve()
     errors, warnings = [], []
 
     state = project / ".lab-forge" / "state.md"
     owned = None
+    state_text = state.read_text(encoding="utf-8") if state.exists() else ""
     if state.exists():
         owned = set(re.findall(r"^\|\s*([^|\s][^|]*?)\s*\|", state.read_text(encoding="utf-8"),
                                flags=re.M)) - {"Path"}
@@ -84,6 +144,8 @@ def check(project, skip_skills):
              else len(lines(path)))
         if n > BUDGET[kind]:
             errors.append(f"{rel}: {n} lines, budget for {kind} is {BUDGET[kind]}")
+
+    errors += check_profile(project, [r for r, _ in rule_files], state_text)
 
     full = [r for r, k in rule_files if k == "rules"]
     if len(full) > 1:
@@ -145,11 +207,14 @@ def check(project, skip_skills):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("project")
+    parser.add_argument("project", nargs="?")
+    parser.add_argument("--engine", action="store_true", help="check the engine's templates and profiles")
     parser.add_argument("--skip-skill", nargs="*", default=[],
                         help="bundled skills installed as-is, not subject to budgets")
     args = parser.parse_args()
-    errors, warnings = check(args.project, set(args.skip_skill))
+    if not args.engine and not args.project:
+        parser.error("give a project or --engine")
+    errors, warnings = check_engine() if args.engine else check(args.project, set(args.skip_skill))
     for w in warnings:
         print(f"WARN  {w}")
     for e in errors:

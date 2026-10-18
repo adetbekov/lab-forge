@@ -1,6 +1,6 @@
 ---
 name: self-review
-description: Checks the agent's own diff for slop before showing it - extra code, needless abstractions, swallowed errors, style drift, unrequested changes. Use this before presenting any code change, before a commit or PR, and whenever the user says "review", "check your code", "too much code", "simplify" or "that's slop".
+description: Checks the agent's own diff for slop before showing it - extra code, needless abstractions, swallowed errors, style drift, unrequested changes. Use this before presenting an M or bigger code change (several steps or files), before a PR, and whenever the user says "review", "check your code", "too much code", "simplify" or "that's slop".
 ---
 
 # self-review
@@ -21,6 +21,10 @@ fix it, do not just report it.
 6. **Style** - names, structure, logging and docstrings match the neighbours
    and {{canonical_path}}.
 7. **Config** - no new hard-coded thresholds, paths or dates; they go to {{params_file}}.
-8. **Checks** - tests/lint pass: {{test_command}}; DS change has its metric.
+8. **Tests bite** - each new test fails if the behaviour it names breaks (assert the effect,
+   not an echo of config); tests/lint pass: {{test_command}}; DS change has its metric.
+9. **Docs** - README, docstrings and comments carry none of these signs of AI text:
+   inflated significance ("pivotal", "serves as"), "not just X but Y", bold for emphasis,
+   bullet lists with bold headers, emoji, a closing summary of what was done.
 
 Report to the user in at most 5 lines: what was trimmed and what remains risky.

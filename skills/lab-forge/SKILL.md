@@ -28,7 +28,8 @@ are tune mode: surgical edits, never a rebuild.
 4. **Markdown diet.** Every generated file has a line budget
    (`references/generation.md`). Link, never repeat. No document "just in case".
 5. **One source of truth.** How to work lives once per machine in
-   `~/.lab-forge/AGENTS.md`; the repo `AGENTS.md` holds only project facts.
+   `~/.lab-forge/AGENTS.md` (core plus defaults); the repo `AGENTS.md` holds
+   project facts and the profile block, copied verbatim.
    Every other entry point is an import, a managed copy or a pointer of at
    most 5 lines. Two hand-kept rule files = drift = bug.
 6. **Rules enforced by tools beat rules in prose** - but only at the level the
@@ -49,15 +50,18 @@ are tune mode: surgical edits, never a rebuild.
 
 ## Modes
 
-- **Seed** - the project is empty or has no code yet. Phase 0, then write only the canonical
-  rules file (at most 40 lines: invariants, task ladder, anti-slop, talking,
-  delivery) and the skills `self-review` and `grill`. No audit, no layout, no
-  params file, no profile invariants about paths, no bundles: the first real
-  task decides structure. Then phase 6. Upgrade to deploy later on request.
+- **Seed** - the project is empty or has no code yet. Phase 0, then write the repo
+  `AGENTS.md` from `rules.md` with only the facts that exist (stated commands,
+  languages) and the profile's repo block copied verbatim, a minimal
+  `pyproject.toml` for Python (`references/generation.md` section 3), and the
+  skills `self-review` and `grill`. No audit, no layout, no params file, no
+  bundles: the first real task decides structure. Then phase 6. Upgrade to
+  deploy later on request.
 - **Deploy** - no `.lab-forge/state.md` found and the project has code. Run phases 0-6.
 - **Tune** - state file exists, the user asks to change the setup, or a phrase
-  sets lasting behaviour ("always", "fewer tests", "пиши короче"). Read
-  `references/tune.md`, apply without asking, and skip the rest.
+  sets lasting behaviour ("always", "fewer tests", "пиши короче"). One line:
+  run `scripts/tune.py add` at once (global rule D9), without reading further.
+  Read `references/tune.md` only for a new skill, project or pack update.
 - **Audit only** - user wants a review without changes. Phases 0-1, report, stop.
 
 ## Deploy workflow
@@ -86,8 +90,9 @@ branches: domain profile, stack, company restrictions, delivery channels (PR,
 wiki, slides), language of docs and commits. No user available -> batch mode:
 decide from evidence, list assumptions at the top of the skeleton.
 
-**Phase 3 - Skeleton.** Pick the domain profile (`references/profiles/`), merge
-with `style-pack/principles.md`, and present: file list with target paths and
+**Phase 3 - Skeleton.** Pick the domain profile (`references/profiles/`): its
+repo block goes into the repo `AGENTS.md` verbatim, never paraphrased. Merge the
+rest with `style-pack/principles.md`, and present: file list with target paths and
 budgets, the rules outline (invariants, task-size ladder, prohibitions), skills
 and commands to create, bundled skills to install. Get explicit confirmation.
 
@@ -106,9 +111,9 @@ has them: they are installed once per machine. Otherwise copy each folder from
 not edit content. Into a repo only when the user asks.
 
 **Phase 6 - Verify and record.** Run the checks in `references/generation.md`
-(budgets, links resolve, no duplicated rules, triggers present), then
+(budgets, links resolve, no duplicated rules, profile block sha), then
 `scripts/smoke.py` to prove each harness loads the rules. Dry run: run every command the user stated (entry point, tests, lint)
-from the project root exactly as written - no install step, no `PYTHONPATH`.
+from the project root exactly as written - no install step, no `PYTHONPATH` - plus a bare `pytest`.
 A failure is a setup bug: fix the rules, not the command. No code yet (seed):
 put those commands into the rules as invariants ("must run from the root as
 written"). Write `.lab-forge/state.md`

@@ -44,7 +44,7 @@ target project already uses.
 | Size | Looks like | What the agent does |
 |---|---|---|
 | S | one clear change, one file or two | just do it, show the diff, no plan file |
-| M | several steps or files, one feature | short plan in chat -> confirm -> step by step, check after each |
+| M | several steps or files, one feature | step by step, check after each, self-review on the diff |
 | L | new module, pipeline, agent, unclear scope | grill -> written plan with steps and done criteria -> confirm -> execute step by step |
 | XL | irreversible or architectural choice | as L, plus a short decision record if the user agrees |
 
@@ -58,7 +58,14 @@ When unsure between two sizes, ask one question instead of choosing the bigger o
 - No defensive code without a reason: no swallowed exceptions, no `except: pass`,
   no silent fallbacks, no retries or sleeps that hide a real problem.
 - No new dependency without asking.
-- No comments that restate the code. Docstrings explain why and contracts.
+- No comments that restate the code. Docstrings state the contract and why in
+  1-2 lines; a comment explains only a non-obvious why. README says what it is
+  and how to run it.
+- Sound method is part of done: each fitted step (preprocessing, calibration,
+  threshold, tuning) learns on rows it is not evaluated on. A smaller diff never
+  justifies a leak.
+- A test must fail when the behaviour it names breaks: assert the effect, not an
+  echo of config. Own helpers get one hand-computed case; no edge-case matrices.
 - No `print` with emoji in production code; use the project's logger.
 - Explicit names over short ones (`build_features(month)` not `proc(d)`).
 - If something does not work: say so. No quiet workaround. If it breaks an
@@ -69,8 +76,8 @@ When unsure between two sizes, ask one question instead of choosing the bigger o
 - Rules file: short, numbered, linking to details instead of repeating them.
 - Do not document what does not exist yet. Plans live apart from docs, and only
   when the task is L or bigger.
-- No generated READMEs, changelogs, status pages or ADRs unless asked or clearly
-  needed.
+- No generated changelogs, status pages or ADRs unless asked or clearly needed.
+  A README with how to run it and a minimal `pyproject.toml` are setup, not extras.
 
 ## 7. Talking to the user
 

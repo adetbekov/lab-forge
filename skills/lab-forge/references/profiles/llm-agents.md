@@ -27,14 +27,19 @@ and measured on its own.
   outputs stay git-ignored, the baseline is updated only on promotion;
 - failures on the golden set are either fixed or listed with a reason.
 
-## Invariants worth proposing
-- Prompts live in dedicated files or modules, versioned, not inline strings
-  scattered in code.
-- Tools validate inputs and return explicit errors; the agent never gets a raw
-  stack trace.
-- Agents write only drafts where a human must approve (data, KB, external actions).
-- No secrets or personal data in prompts, traces or eval sets.
-- Cost and latency are part of the eval report, not only accuracy.
+## Repo block
+Copied into the repo `AGENTS.md` verbatim, markers included, in deploy and seed mode.
+Never paraphrase it; `verify_setup.py` checks the sha.
+
+<!-- lab-forge:begin profile llm-agents sha=d52e32ae8aeb -->
+P1. Prompts live in dedicated files or modules, versioned, not inline strings scattered in code.
+P2. Tools validate inputs and return explicit errors; the agent never gets a raw stack trace.
+P3. Agents write only drafts where a human must approve (data, KB, external actions).
+P4. No secrets or personal data in prompts, traces or eval sets.
+P5. An eval report has the delta vs the committed baseline, plus cost and latency.
+P6. Bare `pytest` from the root is green. A new project gets a minimal `pyproject.toml` (name, deps,
+    `[tool.pytest.ini_options]` `pythonpath = ["."]`); it is setup, not layout.
+<!-- lab-forge:end -->
 
 ## Domain slop to forbid in rules
 - Changing prompt, model and retrieval in one step.
