@@ -63,7 +63,7 @@ on 2026-10-19.
 | C2 | `triage`: quick / build / deep | skill + rule line | 1 line + description | JEB-1880 |
 | C3 | Scope guard: branch, file allowlist, simplicity gate | hook + rule | 0 (hook) | JEB-1879 |
 | C4 | `grill`: questions with real options | skill | description | JEB-1881 |
-| C5 | Verifier: proof before "done" | subagent + Stop hook | 0 | JEB-1880 |
+| C5 | Verifier: proof before "done"; opt-in d1-ultra `guard.py decide stop/skill` beside it | subagent + Stop hook | 0 | JEB-1880, JEB-1893 |
 | C6 | Fresh docs: version pin, import check, docs lookup | guard + rule | 1 line | JEB-1879 |
 | C7 | Memory: repo `AGENTS.md` + `docs/wiki/` (rule 13), no extra layer | rule | 1 line | JEB-1882 |
 | C8 | Routing agents `quick` / `build` / `deep` | subagents | 0 | JEB-1880 |
@@ -71,7 +71,7 @@ on 2026-10-19.
 | C10 | `self-review`: anti-slop check of own diff | skill | description | JEB-1878 |
 
 `guard.py` is one stdlib script with subcommands (`branch`, `scope`, `imports`,
-`stop`). Per-harness hook files are 3-line wrappers. If hooks are missing, the
+`stop`, `decide`). Per-harness hook files are 3-line wrappers. If hooks are missing, the
 same checks run from C5 and from `self-review`.
 
 ## Pain → mechanism → check → benchmark metric

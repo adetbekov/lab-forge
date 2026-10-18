@@ -7,6 +7,7 @@ Harnesses with no global file (Cursor, Copilot in VS Code) get the copy in the r
 
 Usage:
     python install_global.py install [--harness claude,codex,copilot,antigravity] [--no-hooks]
+                                     [--decide off|hosted|local] [--decide-url URL]
     python install_global.py repo DIR     # fallback: principles block in DIR/AGENTS.md
     python install_global.py sync         # re-render every block after an edit or a tune
     python install_global.py check [DIR]  # exit 1 on drift or a missing block
@@ -26,6 +27,11 @@ ENGINE = Path(__file__).resolve().parent.parent
 BEGIN, END = "<!-- lab-forge:begin", "<!-- lab-forge:end -->"
 BLOCK = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", re.DOTALL)
 HOOK_MATCH = {"claude": "Edit|Write|MultiEdit|NotebookEdit|Bash", "codex": ".*"}
+DECIDE_HOOKS = {"Stop": "stop", "UserPromptSubmit": "skill"}
+DATA_NOTE = {
+    "hosted": "decide: hosted d1-ultra; each task, final reply and prompt is sent to api.liquid.ai",
+    "local": "decide: local model at {url}; nothing leaves that endpoint",
+}
 
 
 def lf_home():
@@ -111,15 +117,41 @@ def put_settings(path, kind, hooks):
         ]
     elif hooks:
         python = getattr(sys, "_base_executable", sys.executable)  # a project venv can disappear
-        command = f'"{python}" "{lf_home() / "hooks" / "guard.py"}" hook'
+        command = f'"{python}" "{lf_home() / "hooks" / "guard.py"}"'
         entries = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
         entries[:] = [e for e in entries if "lab-forge" not in json.dumps(e)]
-        entries.append({"matcher": HOOK_MATCH[kind], "hooks": [{"type": "command", "command": command}]})
+        entries.append({"matcher": HOOK_MATCH[kind], "hooks": [{"type": "command", "command": f"{command} hook"}]})
+        on = decide_backend() != "off"
+        for event, mode in DECIDE_HOOKS.items():  # next to other Stop hooks (the verifier), never instead
+            entries = data["hooks"].setdefault(event, [])
+            entries[:] = [e for e in entries if not re.search(r"guard\.py\W+decide", json.dumps(e))]
+            if on:
+                entries.append({"hooks": [{"type": "command", "command": f"{command} decide {mode}", "timeout": 5}]})
+            if not entries:
+                del data["hooks"][event]
     else:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print(f"settings: {path}")
+
+
+def decide_backend():
+    try:
+        return json.loads(read(lf_home() / "decide.json") or "{}").get("backend", "off")
+    except ValueError:
+        return "off"
+
+
+def put_decide(backend, url):
+    """Write decide.json; None keeps what is there. Prints where the data goes."""
+    if backend is not None:
+        cfg = {"backend": backend} | ({"url": url} if url else {})
+        (lf_home() / "decide.json").write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    backend = decide_backend()
+    if backend in DATA_NOTE:
+        url = json.loads(read(lf_home() / "decide.json")).get("url", "http://localhost:11434/v1/systemone")
+        print(DATA_NOTE[backend].format(url=url))
 
 
 def put_engine(skills_dir):
@@ -139,7 +171,7 @@ def put_engine(skills_dir):
     print(f"skill: {dest}")
 
 
-def install(harnesses, hooks):
+def install(harnesses, hooks, decide=None, decide_url=None):
     lf, (_, canary, installed, repos) = lf_home(), state()
     canary = canary or f"LF-{secrets.token_hex(4)}"
     harnesses = list(dict.fromkeys([*installed, *harnesses]))  # a partial rerun keeps the others
@@ -149,6 +181,7 @@ def install(harnesses, hooks):
     if not (lf / "overrides.md").exists():
         (lf / "overrides.md").write_text("# Overrides\n", encoding="utf-8")
     shutil.copy(ENGINE / "scripts" / "guard.py", lf / "hooks" / "guard.py")
+    put_decide(decide, decide_url)
     save_state(canary, harnesses, repos)
     for skills_dir in {SKILL_DIRS[h] for h in harnesses if h in SKILL_DIRS}:
         put_engine(skills_dir)
@@ -187,13 +220,15 @@ def main():
     p.add_argument("dir", nargs="?", type=Path)
     p.add_argument("--harness", default="claude,codex,copilot,antigravity")
     p.add_argument("--no-hooks", action="store_true")
+    p.add_argument("--decide", choices=["off", "hosted", "local"], help="decision hooks backend (default: keep)")
+    p.add_argument("--decide-url", help="local /v1/systemone URL")
     args = p.parse_args()
     if args.action == "install":
         names = [h.strip() for h in args.harness.split(",") if h.strip()]
         unknown = set(names) - set(targets())
         if unknown:
             p.error(f"unknown harness: {', '.join(sorted(unknown))}")
-        return install(names, not args.no_hooks)
+        return install(names, not args.no_hooks, args.decide, args.decide_url)
     if args.action == "repo":
         if not args.dir:
             p.error("repo needs DIR")

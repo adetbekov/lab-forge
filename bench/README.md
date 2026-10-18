@@ -18,6 +18,7 @@ Needs `git`, `uv`, Python 3.11+, and the `claude` CLI authenticated through `ANT
 python bench/bench.py all --out /tmp/lfb                      # lab-forge (skills/lab-forge) vs bare agent, 2 repeats
 python bench/bench.py all --out /tmp/lfb --arm new=path/to/skill --arm old=skills/lab-forge
 python bench/bench.py all --out /tmp/lfb --cases churn --reps 1 --model claude-sonnet-5-5   # quick smoke
+python bench/bench.py all --out /tmp/lfb --arm decide=skills/lab-forge --arm main=skills/lab-forge --decide decide=hosted
 ```
 
 The result is `/tmp/lfb/report.md` and `/tmp/lfb/runs.tsv`. Only those two files and the verdicts go into

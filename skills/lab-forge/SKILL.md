@@ -70,7 +70,7 @@ If `~/.lab-forge/state.md` is missing, install the global layer once for the
 harnesses in use: `scripts/install_global.py install --harness <list>`
 (`references/generation.md` section 8). It writes only user-level files, so
 repo level 0 does not block it; skip the guard hook with `--no-hooks` if the
-user declines it.
+user declines it; `--decide hosted` only on request: it sends prompts and replies to api.liquid.ai.
 
 **Phase 1 - Onboarding audit.** Run `scripts/audit_repo.py <project>` for each
 project the user points at, then read `references/audit.md` and review by hand

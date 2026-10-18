@@ -2,6 +2,8 @@
 """Repeatable A/B benchmark for lab-forge. Stdlib only; needs git and uv.
 
     python bench/bench.py all --out /tmp/lfb                    # headless `claude -p`, one command
+    python bench/bench.py all --out /tmp/lfb --arm decide=skills/lab-forge --arm main=skills/lab-forge \
+        --decide decide=hosted                                  # decision hooks on in one arm only
     python bench/bench.py prepare --out /tmp/lfb                # then, for agent-driven runs:
     python bench/bench.py next --out /tmp/lfb                   #   prompts to run in fresh sessions
     python bench/bench.py record --out /tmp/lfb WS STEP --tokens N --tools N --ms N --reply FILE
@@ -428,6 +430,7 @@ def prepare(args):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(Path(skill).resolve(), dest)
             arms[name] = str(dest)
+    decide = dict(a.split("=", 1) for a in args.decide or [])
     cases = load_cases(args.cases)
     out.mkdir(parents=True, exist_ok=True)
     (out / "state").mkdir(exist_ok=True)
@@ -447,6 +450,9 @@ def prepare(args):
                     continue
                 shutil.rmtree(root, ignore_errors=True)
                 (out / "home" / ws).mkdir(parents=True, exist_ok=True)
+                if arm in decide:  # install_global picks it up at P0 and adds the decide hooks
+                    (out / "home" / ws / ".lab-forge").mkdir(exist_ok=True)
+                    (out / "home" / ws / ".lab-forge" / "decide.json").write_text(json.dumps({"backend": decide[arm]}))
                 if case["kind"] == "existing":
                     shutil.copytree(src, root, ignore=shutil.ignore_patterns(".git"), symlinks=True)
                 else:
@@ -558,6 +564,7 @@ def main():
             s.add_argument("--cases", nargs="*")
             s.add_argument("--seed", type=int, default=1877)
             s.add_argument("--python", default="3.12")
+            s.add_argument("--decide", action="append", help="ARM=hosted|local: decision hooks backend for that arm")
         if name in ("all", "run"):
             s.add_argument("--model", default=None)
             s.add_argument("--judge-model", default=None)
