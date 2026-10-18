@@ -185,6 +185,17 @@ def test_decide_skill_hints_only_when_confident(tmp_path):
     assert decide(tmp_path, "skill", event, url=url) is None
 
 
+def test_decide_skill_offers_every_skill_of_a_crowded_setup(tmp_path):
+    names = [f"skill-{i:02d}" for i in range(40)]  # was cut to the first 25 by name
+    for name in names:
+        (tmp_path / ".claude" / "skills" / name).mkdir(parents=True)
+        (tmp_path / ".claude" / "skills" / name / "SKILL.md").write_text(f"---\nname: {name}\ndescription: d\n---\n")
+    event = {"hook_event_name": "UserPromptSubmit", "prompt": "Backtest the forecast", "cwd": str(tmp_path)}
+    url, seen = fake_d1({"skill": {"choice": "skill-39", "confidence": 0.9}})
+    assert decide(tmp_path, "skill", event, url=url)["hookSpecificOutput"]["additionalContext"].endswith("skill-39")
+    assert set(seen[0]["questions"]["skill"]["criteria"]) == {*names, "none"}
+
+
 def test_install_decide_adds_hooks_next_to_others(tmp_path):
     settings = tmp_path / ".claude" / "settings.json"
     settings.parent.mkdir()

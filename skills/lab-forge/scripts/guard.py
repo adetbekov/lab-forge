@@ -135,6 +135,7 @@ def hook():
 
 
 HOSTED = "https://api.liquid.ai/decisions/v1/systemone"
+MAX_SKILLS = 60  # d1-ultra answers a 60-way choice in ~0.5 s; 100 nears the 1.5 s timeout
 DECIDE = {"backend": "off", "url": "http://localhost:11434/v1/systemone", "threshold": 0.5, "confidence": 0.7}
 STOP_Q = (
     "Given the task and the agent's final report, is the task actually finished and verified, "
@@ -240,7 +241,7 @@ def skills(cwd):
 def decide_skill(event, cfg):
     """Hint one skill when the model is confident it fits the prompt; else stay silent."""
     prompt = event.get("prompt") or ""
-    criteria = dict(list(skills(event.get("cwd") or ".").items())[:25])
+    criteria = dict(list(skills(event.get("cwd") or ".").items())[:MAX_SKILLS])
     if not prompt.strip() or not criteria:
         return None
     criteria["none"] = "No listed skill fits this request"
