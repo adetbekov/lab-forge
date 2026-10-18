@@ -40,8 +40,11 @@ def main(step):
         tail = (run.stderr or run.stdout).strip().splitlines()[-1:] or [""]
         return f"`python -m churn.train` exit {run.returncode}: {tail[0][:150]}"
     for path, flat in fresh_metrics(before):
-        aucs = [v for k, v in flat.items() if "auc" in k and isinstance(v, float)]
-        if len(aucs) < 2 or not all(0.5 < v <= 1 for v in aucs):
+        # deltas such as vs_baseline.*.roc_auc = 0.0 may sit next to the real scores
+        # or the metric is named in a value ({"metric": "roc_auc", "models": {"logreg": 0.78, ...}})
+        named = any(isinstance(v, str) and "auc" in v.lower() for v in flat.values())
+        aucs = [v for k, v in flat.items() if ("auc" in k or named) and isinstance(v, float) and 0.5 < v <= 1]
+        if len(aucs) < 2:
             continue
         if step == "P1":
             return None

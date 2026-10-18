@@ -105,3 +105,27 @@ def test_scope_and_imports(tmp_path):
     assert res.returncode == 1 and "README.md" in res.stdout and "ok.py" not in res.stdout
     res = script("guard.py", "imports", str(proj), "src/ok.py", home=tmp_path)
     assert res.returncode == 1 and "does not resolve: no_such_pkg_xyz" in res.stdout
+
+
+def test_routing_leaves_user_files_alone(tmp_path):
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "build.md").write_text("my own build agent\n")
+    assert script("tune.py", "routing", "on", home=tmp_path).returncode == 0
+    assert (agents / "build.md").read_text() == "my own build agent\n"
+    assert "name: quick" in (agents / "quick.md").read_text()
+    overrides = (tmp_path / ".lab-forge" / "overrides.md").read_text()
+    assert "subagent `quick`" in overrides and "triage" not in overrides
+    hooks = json.loads((tmp_path / ".claude" / "settings.json").read_text())["hooks"]
+    assert all("verify_stop.py" in hooks[e][0]["hooks"][0]["command"] for e in ("Stop", "SubagentStop"))
+    (agents / "verifier.md").write_text("edited by the user\n")
+    assert script("tune.py", "routing", "off", home=tmp_path).returncode == 0
+    assert (agents / "build.md").read_text() == "my own build agent\n"
+    assert (agents / "verifier.md").read_text() == "edited by the user\n"
+    assert not (agents / "quick.md").exists()
+    assert "subagent `quick`" not in (tmp_path / ".lab-forge" / "overrides.md").read_text()
+    hooks = json.loads((tmp_path / ".claude" / "settings.json").read_text())["hooks"]
+    assert hooks["Stop"] == [] and hooks["SubagentStop"] == []
+    # a second on must not claim the user's edited file either
+    script("tune.py", "routing", "on", home=tmp_path)
+    assert (agents / "verifier.md").read_text() == "edited by the user\n"

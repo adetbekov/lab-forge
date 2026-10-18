@@ -1,6 +1,6 @@
 ---
 name: quick
-description: Tier S from triage. A question about the code, or one clear change in one or two files (rename, config, small fix). Use only when triage picked quick.
+description: Tier S. One clear change in one or two files (rename, config, small fix), or a question about the code. Use when the routing rule picks S.
 model: sonnet
 effort: low
 ---

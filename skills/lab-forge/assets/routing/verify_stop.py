@@ -1,7 +1,7 @@
 """Stop hook for Claude Code and Codex: no "done" while the tests of the changed code fail.
 
 Reads the hook JSON on stdin. Runs only when the repo changed since the last green run.
-Command: `- Test: <cmd>` in .lab-forge/state.md, else pytest on the changed test files.
+Command: pytest on the changed test files, else `- Test: <cmd>` from .lab-forge/state.md.
 Red tests block the stop once (stop_hook_active ends the loop); the agent sees the tail.
 """
 
@@ -19,16 +19,17 @@ def git(root, *args):
 
 
 def test_command(root, changed):
+    """pytest on the changed test files; else the `- Test:` command in .lab-forge/state.md if it is concrete."""
+    tests = [f for f in changed if re.search(r"(^|/)test_[^/]*\.py$", f) and (root / f).exists()]
+    venv = root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    if tests:
+        return " ".join([str(venv) if venv.exists() else "python", "-m", "pytest", "-q", "-x", *tests])
     state = root / ".lab-forge" / "state.md"
     if state.exists():
-        found = re.search(r"^- Test: `?([^`\n]+)`?$", state.read_text(encoding="utf-8"), flags=re.MULTILINE)
-        if found:
+        found = re.search(r"^- Test: `([^`\n]+)`", state.read_text(encoding="utf-8"), flags=re.MULTILINE)
+        if found and "<" not in found[1]:
             return found[1].strip()
-    tests = [f for f in changed if re.search(r"(^|/)test_[^/]*\.py$", f) and (root / f).exists()]
-    if not tests:
-        return None
-    venv = root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    return " ".join([str(venv) if venv.exists() else "python", "-m", "pytest", "-q", "-x", *tests])
+    return None
 
 
 def main():

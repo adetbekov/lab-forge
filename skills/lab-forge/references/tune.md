@@ -56,10 +56,11 @@ When the user asks "is my setup still fine", compare state with disk. Report
 hand edits (they win), budgets over the limit, broken links, and dead skills.
 
 ## Model routing (opt-in, experimental)
-"route models", "включи роутинг": `python scripts/tune.py routing on [--hook]`, and
-`routing off` to undo. It installs skill `triage` and the subagents `quick`, `build`,
-`deep` and `verifier` for Claude Code (`~/.claude/agents`) and Codex (`~/.codex/agents`,
-effort only), and adds one override line. `--hook` also adds the Stop hook that runs the
-tests of the changed code, at level 2 or higher only. The main session keeps the user's
-model. The bench run lost to "all on Opus" (`bench/routing/results.md`), so never turn it
-on unasked.
+"route models", "включи роутинг": `python scripts/tune.py routing on [--no-hook]`, and
+`routing off` to undo. It adds one override line with the tier rule (S -> `quick`,
+M -> `build`, L/XL -> the main session itself, then `verifier`), installs those subagents
+for Claude Code (`~/.claude/agents`) and Codex (`~/.codex/agents`, effort only), and adds
+the Stop/SubagentStop hook that runs the tests of the changed code. Agent files the user
+wrote or edited are never overwritten or deleted (`~/.lab-forge/routing.json` lists ours).
+The main session keeps the user's model. Results: `bench/routing/results.md`; never turn
+it on unasked.

@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Checks a finished task against its acceptance criteria with fresh command output. Read-only. Use after quick, build or deep reports done.
+description: Checks a finished L/XL task against its acceptance criteria with fresh command output. Read-only. Use after you finish an L/XL task yourself.
 model: haiku
 effort: low
 tools: Read, Grep, Glob, Bash

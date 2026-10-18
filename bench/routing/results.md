@@ -1,5 +1,94 @@
 # Results: model routing (C2, C5, C8), 2026-10-18
 
+## v2: tier rule in the main thread + Stop hook (JEB-1890)
+
+**Verdict: v2 loses as well, by less. Keep routing off by default.** On the coding steps it
+cost 11% more per solved step than running everything on Opus ($0.152 vs $0.137). Both arms
+solved 16/16 hidden checks. The tier-rule estimate from v1 (about −16%) did not hold: the
+triage session is gone, but a delegated task still needs the main session, and that
+session alone costs about 75% of a whole fixed run.
+
+### Setup
+- Cases `churn`, `rparse`, `optuna`, `encoders`, 2 repeats, agent-driven mode. Raw data:
+  [`results/2026-10-18-routing-v2-fixed-vs-routed`](../results/2026-10-18-routing-v2-fixed-vs-routed/report.md).
+- P0 ran once per case and repeat on Sonnet. It was copied into both arms (paths rewritten),
+  then `tune.py routing on` ran in the routed HOME.
+- `fixed`: each step is one Opus 5.5 session at default effort.
+- `routed-v2`: the main session (Opus, the user's model) reads one override line with the
+  tier rule. S goes to `quick` (Sonnet/low), M goes to `build` (Sonnet/high), and L/XL the
+  main session does itself and then calls `verifier` (Haiku/low). `verify_stop.py` runs as
+  Stop and SubagentStop hook: the harness runs it after every session, and a block goes
+  back to that session once. The worker report goes back to the same main session, which
+  is resumed for the final reply (`bench/routing/rprompt.py`).
+- Only P1 and P2 ran, where routing applies. T, P3 and the blind review were skipped to
+  stay within the session quota: v1 already showed them unchanged by routing (4/4 tune
+  applied, quality a tie).
+
+### Coding steps (P1 + P2)
+
+| Metric | fixed | routed-v2 |
+|---|---|---|
+| Solved, hidden checks | 16/16 | 16/16 |
+| Tokens, k | 939 | 1397 |
+| Cost, $ (`cost.py`, v1 pricing) | 2.20 | 2.44 |
+| Cost per solved step, $ | 0.137 | 0.152 |
+| Escalations | — | 0/16 |
+| Stop hook blocks (all false: env gap) | — | 2 |
+| Files outside scope / unresolved imports | 4 / 0 | 4 / 3 |
+
+The tokens split by role: main sessions 755k (Opus), workers 534k (Sonnet), verifier
+109k (Haiku). By tier, with routed against fixed on the same steps:
+
+| Tier | Steps | fixed, $ | routed, $ | Diff |
+|---|---|---|---|---|
+| quick | 7 | 0.91 | 0.98 | +8% |
+| build | 5 | 0.72 | 0.82 | +14% |
+| L/XL, main does it | 4 | 0.57 | 0.64 | +12% |
+
+Every one of the 16 steps cost more in the routed arm.
+
+### Why it loses
+1. **The main session is not free.** On a delegated step the main session reads the rules,
+   picks the tier, writes the handoff and later relays the report: 31-34k tokens on the
+   first turn and 36-41k at the end, all on Opus. The Sonnet worker saves about half of a
+   50-65k Opus run, which is less than the main session costs. On the 5.5 price sheet
+   (Opus 2x Sonnet, the same cache-read price for both) a split pays off only when the
+   worker's share of the tokens is far larger than the main session's.
+2. **L/XL gains nothing.** The main session does the work, so cost equals fixed plus a
+   Haiku verifier (about $0.002) plus the relay turn. All 4 verifier runs returned PASS.
+3. **The hook added a false block and scope creep.** In optuna r2 P2,
+   `tests/study_tests/test_optimize.py` fails to collect because the venv lacks `fakeredis`,
+   a gap that was already there. The hook blocked the worker (no fix possible) and then
+   the main session, which patched `optuna/testing/storages.py` to make the import lazy.
+   That edit is outside the task and adds 3 unresolved imports.
+
+### Fixed in this run
+- `tune.py routing on/off` never overwrites or deletes a file it did not write.
+  `~/.lab-forge/routing.json` stores a hash of each file it wrote; a user's own or edited
+  `quick.md`/`build.md`/`verifier.md` is skipped. Test:
+  `tests/test_layers.py::test_routing_leaves_user_files_alone`.
+- The triage skill and the `deep` agent are removed: the tier table is one override line.
+- `verify_stop.py` runs pytest on the changed test files first. The `- Test:` line in
+  `state.md` is now only a fallback, and it is ignored when it holds a placeholder: deploys
+  wrote values such as `uv run pytest tests/<file> -k <name>`, which ran the whole suite
+  or failed.
+- Hidden check `churn`: two false negatives fixed (a `vs_baseline` AUC delta of 0.0, and
+  scores keyed by model name under `"metric": "roc_auc"`). `recheck` was run on every step.
+
+### Limits
+- Token counts are the Agent tool's per-session total, the same proxy v1 used, priced with
+  the same assumed mix. Billing per turn would favour short sessions. Fixed sessions made
+  349 tool calls in total, against 132 for routed workers plus 142 for routed main
+  sessions, so the true gap could be smaller or could reverse. Only a headless run
+  (`bench.py all`, which reads real `usage`) can settle it. That needs an API key or OAuth
+  token on the bench machine.
+- The routed main session in churn r1 P1 started `verifier` itself, as a nested subagent
+  whose tokens it did not report. It is counted at v1's average of 28.5k Haiku tokens.
+- n=2, one model family, synthetic tasks of 1-3 files. The tier picks were 7 quick,
+  5 build and 4 L. No task was large enough for `build` to pay off.
+
+## v1: triage session + verifier subagent (first run)
+
 **Verdict: routing as built loses. Do not enable it by default.** On the coding steps it
 cost 28% more than running everything on Opus and solved 6/8 hidden checks against 8/8.
 Blind quality was a tie (27.0 vs 26.9 of 30). The extra sessions eat the savings: the

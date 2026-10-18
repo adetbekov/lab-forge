@@ -8,10 +8,11 @@ go to global overrides with a `[<repo name>]` prefix.
 Usage:
     python tune.py add --scope global|repo "<line>" [--replace "<old line>"] [--repo DIR]
     python tune.py undo [--repo DIR]      # a second undo redoes
-    python tune.py routing on|off [--hook]  # triage + quick/build/deep/verifier subagents
+    python tune.py routing on|off [--no-hook]  # tier rule, quick/build/verifier subagents, Stop hook
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -25,7 +26,12 @@ from guard import on_default_branch  # noqa: E402
 
 SECTION = "## Overrides"
 ROUTING = Path(__file__).resolve().parent.parent / "assets" / "routing"
-ROUTING_LINE = "Start every task with skill `triage`: it picks quick/build/deep and has verifier check the result."
+ROUTING_LINE = (
+    "Route each coding task by size: S (one clear change in 1-2 files) -> subagent `quick`; M (a feature or fix "
+    "over several files of known code) -> subagent `build`; L/XL (new project or module, design choice, unknown "
+    "cause) -> do it yourself, then subagent `verifier`. When unsure, pick the lower tier; `ESCALATE` or a second "
+    "red test run moves the task one tier up."
+)
 LOG_LINE = re.compile(r"^- (\S+ \S+) tune (global|repo) (\[.*\])$")
 
 
@@ -129,47 +135,63 @@ def codex_agent(md):
 
 
 def stop_hooks(path, cmd, on):
-    """Add or remove our Stop hook in a Claude settings.json or Codex hooks.json."""
+    """Add or remove our Stop and SubagentStop hooks in a Claude settings.json or Codex hooks.json."""
+    if not path.exists() and not on:
+        return
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    groups = data.setdefault("hooks", {}).setdefault("Stop", [])
-    groups[:] = [g for g in groups if not any("verify_stop.py" in h.get("command", "") for h in g.get("hooks", []))]
-    if on:
-        groups.append({"hooks": [{"type": "command", "command": cmd, "timeout": 600}]})
+    for event in ("Stop", "SubagentStop") if path.name == "settings.json" else ("Stop",):
+        groups = data.setdefault("hooks", {}).setdefault(event, [])
+        groups[:] = [g for g in groups if not any("verify_stop.py" in h.get("command", "") for h in g.get("hooks", []))]
+        if on:
+            groups.append({"hooks": [{"type": "command", "command": cmd, "timeout": 600}]})
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def digest(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def routing(on, hook, repo):
+    """Install or remove the subagents. Files lab-forge did not write (or the user edited since) stay untouched."""
     home = paths("global", repo)[0].parent
     agents = sorted((ROUTING / "agents").glob("*.md"))
     targets = [(Path.home() / ".claude" / "agents" / a.name, a.read_text(encoding="utf-8")) for a in agents]
     if (Path.home() / ".codex").exists():
         targets += [(Path.home() / ".codex" / "agents" / f"{a.stem}.toml", codex_agent(a.read_text(encoding="utf-8")))
                     for a in agents]
-    skill = (ROUTING / "triage" / "SKILL.md").read_text(encoding="utf-8")
-    targets += [(d / "triage" / "SKILL.md", skill) for d in (home / "skills", Path.home() / ".claude" / "skills",
-                                                               Path.home() / ".agents" / "skills")]
+    manifest = home / "routing.json"
+    owned = json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {}
     for path, text in targets:
-        if on:
+        current = path.read_text(encoding="utf-8") if path.exists() else None
+        ours = current is None or owned.get(str(path)) == digest(current) or (on and current == text)
+        if not ours:
+            print(f"skip {path}: not written by lab-forge, or changed since")
+            owned.pop(str(path), None)
+        elif on:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
-        elif path.exists():
+            owned[str(path)] = digest(text)
+            print(f"+ {path}")
+        elif current is not None:
             path.unlink()
-            if path.name == "SKILL.md":
-                shutil.rmtree(path.parent, ignore_errors=True)
-        print(("+ " if on else "- ") + str(path))
+            owned.pop(str(path), None)
+            print(f"- {path}")
+    home.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps(owned, indent=1) + "\n", encoding="utf-8")
+    if not owned:
+        manifest.unlink()
     script = home / "hooks" / "verify_stop.py"
     if on and hook:
         script.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROUTING / "verify_stop.py", script)
     elif not on:
         script.unlink(missing_ok=True)
-    if hook or not on:
-        cmd = f'python "{script}"'
-        stop_hooks(Path.home() / ".claude" / "settings.json", cmd, on and hook)
-        if (Path.home() / ".codex").exists():
-            stop_hooks(Path.home() / ".codex" / "hooks.json", cmd, on and hook)
-        print(("+ " if on and hook else "- ") + f"Stop hook {script}")
+    cmd = f'python "{script}"'
+    stop_hooks(Path.home() / ".claude" / "settings.json", cmd, on and hook)
+    if (Path.home() / ".codex").exists():
+        stop_hooks(Path.home() / ".codex" / "hooks.json", cmd, on and hook)
+    print(("+ " if on and hook else "- ") + f"Stop hook {script}")
     claude_md = Path.home() / ".claude" / "CLAUDE.md"
     text = claude_md.read_text(encoding="utf-8") if claude_md.exists() else ""
     if on and "overrides.md" not in text:  # install_global.py already imports it
@@ -190,7 +212,7 @@ def main():
     parser.add_argument("--scope", choices=["global", "repo"])
     parser.add_argument("--replace")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
-    parser.add_argument("--hook", action="store_true", help="routing on: also install the Stop hook")
+    parser.add_argument("--no-hook", dest="hook", action="store_false", help="routing on: skip the Stop hook")
     args = parser.parse_args()
     if args.action == "add":
         if not args.line or not args.scope:

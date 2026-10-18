@@ -60,13 +60,13 @@ on 2026-10-19.
 | ID | Component | Kind | Always-on cost | Stage 3 issue |
 |---|---|---|---|---|
 | C1 | Principles: global `AGENTS.md` | rule | ≤60 lines | JEB-1879 |
-| C2 | `triage`: quick / build / deep | skill + rule line | 1 line + description | JEB-1880 |
+| C2 | Tier rule: S `quick` / M `build` / L main | rule line | 1 line | JEB-1880 |
 | C3 | Scope guard: branch, file allowlist, simplicity gate | hook + rule | 0 (hook) | JEB-1879 |
 | C4 | `grill`: questions with real options | skill | description | JEB-1881 |
 | C5 | Verifier: proof before "done" | subagent + Stop hook | 0 | JEB-1880 |
 | C6 | Fresh docs: version pin, import check, docs lookup | guard + rule | 1 line | JEB-1879 |
 | C7 | Memory: `docs/wiki/` + `handoff` | skill | description | JEB-1882 |
-| C8 | Routing agents `quick` / `build` / `deep` | subagents | 0 | JEB-1880 |
+| C8 | Routing agents `quick` / `build` / `verifier` | subagents | 0 | JEB-1880 |
 | C9 | `tune` | engine mode | 0 | JEB-1881 |
 | C10 | `self-review`: anti-slop check of own diff | skill | description | JEB-1878 |
 
@@ -150,6 +150,7 @@ win.
   blocks a commit on `main` even when asked). Gemini CLI loads `~/.gemini/GEMINI.md` ✓ and
   repo `AGENTS.md` only with `context.fileName` (set by the installer). Codex, Copilot,
   Cursor and Antigravity IDE still need a run on a logged-in machine.
-- C2, C5 and C8 lost their first A/B (`bench/routing/results.md`): +28% cost, 6/8 vs
-  8/8 solved. They ship off by default (`tune.py routing on`). Next to test: triage
-  inline in the main thread, the Stop hook instead of the verifier subagent.
+- C2, C5 and C8 lost both A/Bs (`bench/routing/results.md`): v1 (triage session +
+  verifier) +28% cost, v2 (tier rule inline + Stop hook) +11% per solved step at equal
+  solve rate. Delegating costs a main-session run on top of the worker. They ship off by
+  default (`tune.py routing on`).

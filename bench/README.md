@@ -35,8 +35,9 @@ When `claude -p` is not available, an orchestrating agent runs each step in a fr
    The reviewer saves `<key>.verdict.md` next to it.
 4. `bench.py report --out DIR`.
 
-For arms that need more than one session per step (routing), `bench/routing/rprompt.py` builds the triage, worker,
-verifier and escalation prompts from the `next` prompt.
+For arms that need more than one session per step (routing), `bench/routing/rprompt.py` builds the main, worker and
+verifier prompts from the `next` prompt, runs the Stop hook and prints the relay message; `bench/routing/cost.py`
+prices the coding steps from `sessions.tsv`.
 
 If a hidden check turns out to be wrong, fix it and run `bench.py recheck --out DIR`; no session needs to rerun.
 
