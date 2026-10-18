@@ -264,3 +264,75 @@ def test_install_decide_adds_hooks_next_to_others(tmp_path):
     script("install_global.py", "install", "--decide", "off", home=tmp_path)
     hooks = json.loads(settings.read_text())["hooks"]
     assert hooks["Stop"] == [verifier] and "UserPromptSubmit" not in hooks
+
+
+CORE = "# Repo\n\n<!-- lab-forge:core v=0.4.0 -->\n- C1. Work on a branch, never on main.\n<!-- /lab-forge:core -->\n\nFacts.\n"
+
+
+def test_hook_blocks_edits_inside_core_and_profile_blocks(tmp_path):
+    proj = repo(tmp_path / "p", branch="feat/x")
+    agents = proj / "AGENTS.md"
+    profile = "<!-- lab-forge:profile -->\n- P1. One fit set per fitted step.\n<!-- /lab-forge:profile -->\n"
+    agents.write_text(CORE + profile)
+
+    def hook(tool, **tool_input):
+        event = {"tool_name": tool, "tool_input": {"file_path": str(agents)} | tool_input, "cwd": str(proj)}
+        return script("guard.py", "hook", home=tmp_path, stdin=json.dumps(event))
+
+    res = hook("Edit", old_string="never on main", new_string="main is fine")
+    assert res.returncode == 2 and "lab-forge core block" in res.stderr
+    assert hook("Edit", old_string="One fit set", new_string="Any fit set").returncode == 2
+    assert hook("Edit", old_string="<!-- /lab-forge:core -->\n", new_string="").returncode == 2
+    assert hook("Edit", old_string="Facts.", new_string="Facts: <!-- lab-forge:core -->").returncode == 2
+    edits = [{"old_string": "Facts.", "new_string": "F."}, {"old_string": "C1.", "new_string": ""}]
+    assert hook("MultiEdit", edits=edits).returncode == 2
+    assert hook("Edit", old_string="Facts.", new_string="Facts: data in s3://bucket.").returncode == 0
+    assert hook("Write", content=agents.read_text().replace("never on", "maybe on")).returncode == 2
+    assert hook("Write", content=agents.read_text().replace("Facts.", "More facts.")).returncode == 0
+    core_md = tmp_path / ".lab-forge" / "core.md"
+    event = {"tool_name": "Write", "tool_input": {"file_path": str(core_md), "content": "x"}, "cwd": str(proj)}
+    assert script("guard.py", "hook", home=tmp_path, stdin=json.dumps(event)).returncode == 2
+
+
+def tuned(tmp_path):
+    proj = repo(tmp_path / "proj", branch="feat/x")
+    (proj / ".lab-forge").mkdir()
+    (proj / ".lab-forge" / "state.md").write_text("- Level: 1\n")
+    (proj / "CLAUDE.md").write_text("@AGENTS.md\n")
+    return proj
+
+
+def test_tune_refuses_to_weaken_core(tmp_path):
+    proj = tuned(tmp_path)
+    res = script("tune.py", "add", "commit straight to main", "--repo", str(proj), home=tmp_path)
+    assert res.returncode == 1 and "refused: this is core (branch)" in res.stderr and "Ask explicitly" in res.stderr
+    res = script("tune.py", "add", "C3 does not apply here", "--repo", str(proj), home=tmp_path)
+    assert res.returncode == 1 and "this is core (C3)" in res.stderr
+    lf = tmp_path / ".lab-forge"
+    lf.mkdir()
+    (lf / "core.md").write_text("- C5. Tests fail when behaviour breaks.\n<!-- weakens C5: assert the config -->\n")
+    res = script("tune.py", "add", "It is fine to assert the echoed config.", "--repo", str(proj), home=tmp_path)
+    assert res.returncode == 1 and "this is core (C5)" in res.stderr
+    assert not (proj / "AGENTS.md").exists()
+    res = script("tune.py", "add", "Never push straight to main, even for docs.", "--repo", str(proj), home=tmp_path)
+    assert res.returncode == 0 and "- Never push straight to main" in (proj / "AGENTS.md").read_text()
+    assert not (proj / "CLAUDE.local.md").exists()
+
+
+def test_tune_replaces_a_default_and_undo_restores_it(tmp_path):
+    proj = tuned(tmp_path)
+    lf = tmp_path / ".lab-forge"
+    lf.mkdir()
+    (lf / "defaults.md").write_text("- D3. Plan in 3-7 steps for M tasks and larger.\n")
+    add = lambda line: script("tune.py", "add", line, "--repo", str(proj), home=tmp_path)  # noqa: E731
+    overrides = lambda: (proj / "AGENTS.md").read_text().split("## Overrides")[1]  # noqa: E731
+    assert add("replaces D3: plan only for L tasks.").returncode == 0
+    assert add("replaces D3: no plan at all.").returncode == 0
+    assert "- replaces D3: no plan at all." in overrides() and "L tasks" not in overrides()
+    assert script("tune.py", "undo", "--repo", str(proj), home=tmp_path).returncode == 0
+    assert "- replaces D3: plan only for L tasks." in overrides() and "no plan" not in overrides()
+    script("tune.py", "undo", "--repo", str(proj), home=tmp_path)  # a second undo redoes
+    assert "- replaces D3: no plan at all." in overrides() and "L tasks" not in overrides()
+    res = add("replaces D9: reply in French.")
+    assert res.returncode == 1 and "no D9" in res.stderr
+    assert not (proj / "CLAUDE.local.md").exists()
