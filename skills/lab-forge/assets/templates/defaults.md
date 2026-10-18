@@ -17,7 +17,7 @@ D8. Before showing code, check the diff: every line serves the ask, nothing exis
     swallowed error, nothing right by accident, tests pass. M or bigger: skill `self-review` instead.
     End with one line: what you skipped or did not check, and the risk.
 D9. A lasting preference ("always", "never", "fewer tests", "пиши короче") is a tune. Do not load a skill:
-    run `python {{engine}}/scripts/tune.py add --scope global|repo "<one imperative line>"`, show the diff.
+    run `python {{tune}} add --scope global|repo "<one imperative line>"`, show the diff.
 
 ## Smoke test
 If the whole user message is `lab-forge ping`, do not use tools. Reply on one line:

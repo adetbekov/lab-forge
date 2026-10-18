@@ -13,8 +13,9 @@ Usage:
 to the given /v1/systemone URL. Any error, timeout or missing key does nothing (fail-open).
 
 A repo opts out of the branch rule with `git config lab-forge.allowMain true`.
-Core and profile blocks (`<!-- lab-forge:core -->` ... `<!-- /lab-forge:core -->`, same for `profile`)
-and $LAB_FORGE_HOME/core.md change only through lab-forge upgrade, never through an agent edit.
+Managed blocks (`<!-- lab-forge:begin core|profile ... -->` ... `<!-- lab-forge:end -->`, the one marker
+format install, upgrade, verify and the profiles use) and $LAB_FORGE_HOME/core.md change only through
+lab-forge install or upgrade, never through an agent edit.
 """
 
 import ast
@@ -29,8 +30,9 @@ from pathlib import Path
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch", "edit", "write"}
 COMMIT = re.compile(r"\bgit\b[^;&|]*\b(commit|merge|cherry-pick|rebase)\b")
-BLOCK = re.compile(r"<!-- lab-forge:(core|profile)\b[^>]*-->.*?<!-- /lab-forge:\1 -->", re.S)
-MARKER = re.compile(r"<!-- /?lab-forge:(core|profile)\b")
+# group 1 is the layer; a v0.3 block has none and holds the core
+BLOCK = re.compile(r"<!-- lab-forge:begin\b(?: (core|profile)\b)?[^>]*-->.*?<!-- lab-forge:end -->", re.S)
+MARKER = re.compile(r"<!-- lab-forge:(?:begin\b(?: (core|profile)\b)?|end -->)")
 
 
 def git(cwd, *args):
@@ -127,18 +129,18 @@ def touched_block(path, tool, args):
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         text = ""
-    found = [(m[1], m.start(), m.end()) for m in BLOCK.finditer(text)]
+    found = [(m[1] or "core", m.start(), m.end()) for m in BLOCK.finditer(text)]
     if tool in {"Write", "write"}:  # a full rewrite must carry every block unchanged
         new = args.get("content") or ""
         kept = [m[0] for m in BLOCK.finditer(new)]
         if kept != [text[s:e] for _, s, e in found] or len(MARKER.findall(new)) != 2 * len(kept):
-            return found[0][0] if found else MARKER.search(new)[1]
+            return found[0][0] if found else MARKER.search(new)[1] or "core"
         return None
     for edit in args.get("edits") or [args]:  # MultiEdit carries a list, Edit one pair
         old, new = edit.get("old_string") or "", edit.get("new_string") or ""
         marker = MARKER.search(old + "\n" + new)
         if marker:
-            return marker[1]
+            return marker[1] or "core"
         at = text.find(old) if old else -1
         while at >= 0:
             hit = next((name for name, s, e in found if at < e and at + len(old) > s), None)

@@ -62,4 +62,4 @@ def test_install_renders_core_and_defaults(tmp_path):
     assert res.returncode == 0, res.stderr
     text = (tmp_path / ".lab-forge" / "AGENTS.md").read_text()
     assert "C5." in text and "D9." in text and "{{" not in text
-    assert f"python {ENGINE.as_posix()}/scripts/tune.py add" in text
+    assert f"python {(tmp_path / '.lab-forge').as_posix()}/tune.py add" in text

@@ -124,10 +124,14 @@ the dry run described in SKILL.md phase 6.
 ## 8. Global layer and harness adapters
 
 `scripts/install_global.py install --harness <list>` writes `~/.lab-forge/`
-(`AGENTS.md` from `assets/templates/core.md` + `defaults.md`, `overrides.md`,
-`hooks/guard.py`, `state.md`) and one managed block per harness. It never
-touches text outside its `<!-- lab-forge:begin/end -->` markers, and a rerun
-keeps the canary.
+(`core.md`, `defaults.md`, `AGENTS.md` = both, `overrides.md`, `tune.py`,
+`hooks/guard.py`, `state.md` with `- Version:`) and one managed block
+`<!-- lab-forge:begin core v=… sha=… -->` per harness. It never touches text
+outside its markers, and a rerun keeps the canary. A file or block the user
+edited is merged with `git merge-file` on the last render kept in
+`~/.lab-forge/base/`; a conflict leaves it as is and writes `<file>.rej`. Changed
+files are backed up to `~/.lab-forge/backup/<time>/` first. `uninstall` removes
+the blocks, hooks and skill links. Older installs go through `scripts/upgrade.py`.
 
 | Harness | Global file | How | Guard hook |
 |---|---|---|---|
