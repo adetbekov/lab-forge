@@ -58,7 +58,12 @@ are tune mode: surgical edits, never a rebuild.
   bundles: the first real task decides structure. Then phase 6. Upgrade to
   deploy later on request.
 - **Deploy** - no `.lab-forge/state.md` found and the project has code. Run phases 0-6.
-- **Tune** - state file exists, the user asks to change the setup, or a phrase
+- **Upgrade** - `.lab-forge/state.md` or `~/.lab-forge/state.md` exists and its
+  `- Version:` is older than the engine's (`VERSION` in `scripts/install_global.py`)
+  or missing (v0.1-v0.3). Run `scripts/upgrade.py --repo <project>`: a dry run that
+  prints the diff. Show it, apply with `--apply` after a yes (it backs up first),
+  report any `.rej` conflict as is, then continue with what the user asked.
+- **Tune** - state file exists and is current, the user asks to change the setup, or a phrase
   sets lasting behaviour ("always", "fewer tests", "пиши короче"). One line:
   run `scripts/tune.py add` at once (global rule D9), without reading further.
   Read `references/tune.md` only for a new skill, project or pack update.

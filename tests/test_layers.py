@@ -266,13 +266,16 @@ def test_install_decide_adds_hooks_next_to_others(tmp_path):
     assert hooks["Stop"] == [verifier] and "UserPromptSubmit" not in hooks
 
 
-CORE = "# Repo\n\n<!-- lab-forge:core v=0.4.0 -->\n- C1. Work on a branch, never on main.\n<!-- /lab-forge:core -->\n\nFacts.\n"
+CORE = (
+    "# Repo\n\n<!-- lab-forge:begin core v=0.4.0 sha=0 -->\n- C1. Work on a branch, never on main.\n"
+    "<!-- lab-forge:end -->\n\nFacts.\n"
+)
 
 
 def test_hook_blocks_edits_inside_core_and_profile_blocks(tmp_path):
     proj = repo(tmp_path / "p", branch="feat/x")
     agents = proj / "AGENTS.md"
-    profile = "<!-- lab-forge:profile -->\n- P1. One fit set per fitted step.\n<!-- /lab-forge:profile -->\n"
+    profile = "<!-- lab-forge:begin profile x sha=0 -->\n- P1. One fit set per fitted step.\n<!-- lab-forge:end -->\n"
     agents.write_text(CORE + profile)
 
     def hook(tool, **tool_input):
@@ -282,8 +285,8 @@ def test_hook_blocks_edits_inside_core_and_profile_blocks(tmp_path):
     res = hook("Edit", old_string="never on main", new_string="main is fine")
     assert res.returncode == 2 and "lab-forge core block" in res.stderr
     assert hook("Edit", old_string="One fit set", new_string="Any fit set").returncode == 2
-    assert hook("Edit", old_string="<!-- /lab-forge:core -->\n", new_string="").returncode == 2
-    assert hook("Edit", old_string="Facts.", new_string="Facts: <!-- lab-forge:core -->").returncode == 2
+    assert hook("Edit", old_string="<!-- lab-forge:end -->\n", new_string="").returncode == 2
+    assert hook("Edit", old_string="Facts.", new_string="Facts: <!-- lab-forge:begin core -->").returncode == 2
     edits = [{"old_string": "Facts.", "new_string": "F."}, {"old_string": "C1.", "new_string": ""}]
     assert hook("MultiEdit", edits=edits).returncode == 2
     assert hook("Edit", old_string="Facts.", new_string="Facts: data in s3://bucket.").returncode == 0

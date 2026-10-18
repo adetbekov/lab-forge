@@ -22,7 +22,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+sys.path[:0] = [str(HERE), str(HERE / "hooks")]  # the engine's scripts/, or the copy in ~/.lab-forge
 from guard import lf_home, on_default_branch  # noqa: E402
 
 SECTION = "## Overrides"
