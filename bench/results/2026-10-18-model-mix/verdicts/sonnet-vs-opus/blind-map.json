@@ -1,0 +1,18 @@
+{
+ "churn-r1": {
+  "X": "sonnet",
+  "Y": "opus"
+ },
+ "encoders-r1": {
+  "X": "opus",
+  "Y": "sonnet"
+ },
+ "optuna-r1": {
+  "X": "opus",
+  "Y": "sonnet"
+ },
+ "rparse-r1": {
+  "X": "opus",
+  "Y": "sonnet"
+ }
+}

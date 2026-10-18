@@ -7,6 +7,7 @@ Latest results: [`results/2026-10-18-v0.2-vs-bare`](results/2026-10-18-v0.2-vs-b
 [`results/2026-10-18-layers-vs-v0.1`](results/2026-10-18-layers-vs-v0.1/notes.md),
 [`results/2026-10-18-layers-vs-v0.1-headless`](results/2026-10-18-layers-vs-v0.1-headless/notes.md),
 [`results/2026-10-18-memory-wiki-vs-map`](results/2026-10-18-memory-wiki-vs-map/report.md) ([summary](memory/results.md));
+[`results/2026-10-18-model-mix`](results/2026-10-18-model-mix/report.md) (which model plays which role, `modelmix/mix.py`);
 previous: [`v0.1`](results/2026-10-17-v0.1-vs-bare/report.md).
 
 ## Run it

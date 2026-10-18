@@ -1,0 +1,18 @@
+{
+ "churn-r1": {
+  "X": "mix4",
+  "Y": "opus"
+ },
+ "encoders-r1": {
+  "X": "opus",
+  "Y": "mix4"
+ },
+ "optuna-r1": {
+  "X": "opus",
+  "Y": "mix4"
+ },
+ "rparse-r1": {
+  "X": "opus",
+  "Y": "mix4"
+ }
+}
