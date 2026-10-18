@@ -3,7 +3,8 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest results: [`results/2026-10-18-decide-vs-main`](results/2026-10-18-decide-vs-main/notes.md),
+Latest results: [`results/2026-10-18-skillpick`](results/2026-10-18-skillpick/notes.md),
+[`results/2026-10-18-decide-vs-main`](results/2026-10-18-decide-vs-main/notes.md),
 [`results/2026-10-18-v0.2-vs-bare`](results/2026-10-18-v0.2-vs-bare/report.md),
 [`results/2026-10-18-layers-vs-v0.1`](results/2026-10-18-layers-vs-v0.1/notes.md),
 [`results/2026-10-18-layers-vs-v0.1-headless`](results/2026-10-18-layers-vs-v0.1-headless/notes.md),
