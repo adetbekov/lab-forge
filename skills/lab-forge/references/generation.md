@@ -129,13 +129,25 @@ Copies follow `overrides.md`: `tune.py` runs `sync` after a global tune.
 hand: `guard.py branch`, `guard.py scope` (globs in `.lab-forge/scope`),
 `guard.py imports` (unresolved imports, installed versions to read docs for).
 
-Decision hooks, opt-in, off by default: `install --decide hosted|local [--decide-url URL]` writes
+Decision hooks, opt-in, off by default, with the user's own endpoint and key:
+`install --decide hosted|local|custom [--decide-url URL] [--decide-model NAME] [--decide-key-env VAR]` writes
 `~/.lab-forge/decide.json` and adds `guard.py decide stop` (Stop: blocks an unverified "done" once,
 "not verified: <what is missing>") and `guard.py decide skill` (UserPromptSubmit: "load skill X" at
-confidence ≥ 0.7) for Claude Code and Codex, next to any other Stop hook. **`hosted` sends each prompt,
-task and final reply to api.liquid.ai (d1-ultra, `LIQUID_AI_API_KEY`); `local` sends them only to your
-URL.** Timeout 1.5 s; any error does nothing. `--decide off` removes the hooks. Local d1-omni-600M
-cannot judge `stop` or `skill` (JEB-1889 eval), so use it only for plumbing tests.
+confidence ≥ 0.7, over project, user and enabled plugin skills) for Claude Code and Codex, next to any other Stop
+hook. **Whatever backend is set gets each prompt, task and final reply; the install prints the host.**
+
+| backend | default url / model | key |
+|---|---|---|
+| `hosted` | api.liquid.ai, `d1-ultra` | `$LIQUID_AI_API_KEY` |
+| `local` | `http://localhost:11434/v1/systemone`, `d1-omni:600m` | none |
+| `custom` | your `--decide-url` and `--decide-model` (required) | `$VAR` from `--decide-key-env`, optional |
+
+Any provider works as `custom` if it takes the `/v1/systemone` body (`model`, `state`, `questions` → `answers`);
+another API shape needs a proxy that speaks it. The key never goes on the command line or into chat: the user
+exports the variable where the agent starts, or writes it to `~/.lab-forge/decide.key` (chmod 600), which is read
+when the variable is unset. Without a key the hooks stay silent; the install says which key is missing. Timeout
+1.5 s; any error does nothing. `--decide off` removes the hooks. Local d1-omni-600M cannot judge `stop` or `skill`
+(JEB-1889 eval), so use it only for plumbing tests.
 
 Smoke test after install: `scripts/smoke.py`. Each harness CLI found on PATH
 answers `lab-forge ping` with the global and repo canaries, and Claude Code and

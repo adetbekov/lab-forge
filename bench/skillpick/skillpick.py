@@ -139,7 +139,7 @@ def skill_md(name, desc):
 
 
 def router(out, crowded=False):
-    cfg = guard.DECIDE | {"backend": "hosted"}
+    cfg = guard.DECIDE | guard.BACKENDS["hosted"] | {"backend": "hosted"}
     sandbox = out / "router-skills"
     for name, desc in installed(crowded).items():
         (sandbox / ".claude" / "skills" / name).mkdir(parents=True, exist_ok=True)

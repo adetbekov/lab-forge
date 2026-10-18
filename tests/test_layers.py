@@ -14,8 +14,10 @@ def sh(*cmd, cwd=None, env=None, stdin=None):
     return subprocess.run(cmd, cwd=cwd, env=env, input=stdin, capture_output=True, text=True, check=False)
 
 
-def script(name, *args, home, cwd=None, stdin=None):
-    env = {"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin", "LAB_FORGE_HOME": str(home / ".lab-forge")}
+def script(name, *args, home, cwd=None, stdin=None, env=None):
+    env = {"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin", "LAB_FORGE_HOME": str(home / ".lab-forge")} | (
+        env or {}
+    )
     return sh(sys.executable, str(SCRIPTS / name), *args, cwd=cwd, env=env, stdin=stdin)
 
 
@@ -115,7 +117,8 @@ def fake_d1(answers, delay=0):
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
-            seen.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            seen.append(body | {"auth": self.headers.get("Authorization")})
             threading.Event().wait(delay)
             out = json.dumps({"answers": answers}).encode()
             self.send_response(200)
@@ -131,10 +134,10 @@ def fake_d1(answers, delay=0):
     return f"http://127.0.0.1:{server.server_port}/v1/systemone", seen
 
 
-def decide(home, mode, event, backend="local", url=None):
+def decide(home, mode, event, backend="local", url=None, env=None, **cfg):
     (home / ".lab-forge").mkdir(exist_ok=True)
-    (home / ".lab-forge" / "decide.json").write_text(json.dumps({"backend": backend, "url": url}))
-    res = script("guard.py", "decide", mode, home=home, stdin=json.dumps(event))
+    (home / ".lab-forge" / "decide.json").write_text(json.dumps({"backend": backend, "url": url} | cfg))
+    res = script("guard.py", "decide", mode, home=home, stdin=json.dumps(event), env=env)
     assert res.returncode == 0
     return json.loads(res.stdout) if res.stdout.strip() else None
 
@@ -194,6 +197,53 @@ def test_decide_skill_offers_every_skill_of_a_crowded_setup(tmp_path):
     url, seen = fake_d1({"skill": {"choice": "skill-39", "confidence": 0.9}})
     assert decide(tmp_path, "skill", event, url=url)["hookSpecificOutput"]["additionalContext"].endswith("skill-39")
     assert set(seen[0]["questions"]["skill"]["criteria"]) == {*names, "none"}
+
+
+def test_decide_custom_backend_uses_the_users_own_key(tmp_path):
+    event = {"hook_event_name": "UserPromptSubmit", "prompt": "Ask me first", "cwd": str(tmp_path)}
+    (tmp_path / ".claude" / "skills" / "grill").mkdir(parents=True)
+    (tmp_path / ".claude" / "skills" / "grill" / "SKILL.md").write_text("---\nname: grill\ndescription: d\n---\n")
+    url, seen = fake_d1({"skill": {"choice": "grill", "confidence": 0.9}})
+    custom = {"backend": "custom", "url": url, "model": "my-d1", "key_env": "MY_D1_KEY"}
+    assert decide(tmp_path, "skill", event, **custom) is None and not seen  # key_env set, no key: silent
+    assert decide(tmp_path, "skill", event, env={"MY_D1_KEY": "k-env"}, **custom)
+    assert seen[-1]["model"] == "my-d1" and seen[-1]["auth"] == "Bearer k-env"
+    (tmp_path / ".lab-forge" / "decide.key").write_text("k-file\n")
+    assert decide(tmp_path, "skill", event, **custom) and seen[-1]["auth"] == "Bearer k-file"
+    assert decide(tmp_path, "skill", event, backend="custom", url=url) is None  # no model: off
+
+
+def test_decide_skill_sees_enabled_plugin_skills(tmp_path):
+    plugins = tmp_path / ".claude" / "plugins"
+    for name in ("review", "other"):
+        (plugins / "cache" / name / "skills" / name).mkdir(parents=True)
+        (plugins / "cache" / name / "skills" / name / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: >\n  Reviews a diff.\n  Use for PRs.\n---\n"
+        )
+    entry = lambda name: [{"scope": "user", "installPath": str(plugins / "cache" / name)}]  # noqa: E731
+    installed = {"version": 2, "plugins": {"pr@market": entry("review"), "off@market": entry("other")}}
+    (plugins / "installed_plugins.json").write_text(json.dumps(installed))
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {"off@market": False}}))
+    event = {"hook_event_name": "UserPromptSubmit", "prompt": "Review my diff", "cwd": str(tmp_path)}
+    url, seen = fake_d1({"skill": {"choice": "pr:review", "confidence": 0.9}})
+    out = decide(tmp_path, "skill", event, url=url)
+    assert out["hookSpecificOutput"]["additionalContext"] == "lab-forge: load skill pr:review"
+    assert seen[0]["questions"]["skill"]["criteria"]["pr:review"] == "Reviews a diff. Use for PRs."
+    assert set(seen[0]["questions"]["skill"]["criteria"]) == {"pr:review", "none"}
+
+
+def test_install_tells_how_to_bring_your_own_decision_model(tmp_path):
+    res = script("install_global.py", "install", "--harness", "claude", home=tmp_path)
+    assert "decide: off. Optional:" in res.stdout and "--decide hosted|local|custom" in res.stdout
+    res = script("install_global.py", "install", "--decide", "custom", home=tmp_path)
+    assert res.returncode and "needs --decide-url and --decide-model" in res.stderr
+    args = ["--decide", "custom", "--decide-url", "https://d1.example/v1/systemone", "--decide-model", "m"]
+    res = script("install_global.py", "install", *args, "--decide-key-env", "MY_D1_KEY", home=tmp_path)
+    assert "sent to d1.example" in res.stdout and "decide key: missing. Add your own: export MY_D1_KEY" in res.stdout
+    res = script("install_global.py", "install", home=tmp_path, env={"MY_D1_KEY": "s3cret"})
+    assert "found in $MY_D1_KEY" in res.stdout and "s3cret" not in res.stdout
+    hooks = json.loads((tmp_path / ".claude" / "settings.json").read_text())["hooks"]
+    assert hooks["Stop"][0]["hooks"][0]["command"].endswith("decide stop")
 
 
 def test_install_decide_adds_hooks_next_to_others(tmp_path):

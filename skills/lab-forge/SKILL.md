@@ -70,7 +70,10 @@ If `~/.lab-forge/state.md` is missing, install the global layer once for the
 harnesses in use: `scripts/install_global.py install --harness <list>`
 (`references/generation.md` section 8). It writes only user-level files, so
 repo level 0 does not block it; skip the guard hook with `--no-hooks` if the
-user declines it; `--decide hosted` only on request: it sends prompts and replies to api.liquid.ai.
+user declines it. The install prints a one-line offer of the decision hooks (`--decide`); repeat it to the user,
+and offer it again when they complain the agent claims "done" too early or skips the right skill. Enable it only on
+request, with their endpoint and model; they add the key themselves (env var or `~/.lab-forge/decide.key`), never
+in chat. Say where the data goes: the install prints the host.
 
 **Phase 1 - Onboarding audit.** Run `scripts/audit_repo.py <project>` for each
 project the user points at, then read `references/audit.md` and review by hand
