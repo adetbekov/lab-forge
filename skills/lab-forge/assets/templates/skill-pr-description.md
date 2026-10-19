@@ -1,6 +1,6 @@
 ---
 name: pr-description
-description: Writes a short PR/MR description from the diff and the task - what and why, steps, how it was checked, known gaps. Use this whenever the user prepares a pull request or merge request, asks to "describe the PR", "write MR text" or is about to push a branch for review.
+description: Writes a short PR/MR description from the diff and the task: what and why, how it was checked, known gaps. Use when the user prepares a pull or merge request or says "describe the PR", "write MR text".
 ---
 
 # pr-description

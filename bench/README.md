@@ -3,7 +3,8 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest results: [`results/2026-10-19-v0.4`](results/2026-10-19-v0.4/report.md) (v0.4 vs v0.3, bare),
+Latest results: [`results/2026-10-19-v0.4.1`](results/2026-10-19-v0.4.1/report.md) (v0.4.1 vs v0.4, bare),
+[`results/2026-10-19-v0.4`](results/2026-10-19-v0.4/report.md) (v0.4 vs v0.3, bare),
 [`results/2026-10-18-v0.3`](results/2026-10-18-v0.3/report.md) (v0.3 vs v0.2, ponytail, bare),
 [`results/2026-10-18-skillpick`](results/2026-10-18-skillpick/notes.md),
 [`results/2026-10-18-decide-vs-main`](results/2026-10-18-decide-vs-main/notes.md),
@@ -49,6 +50,11 @@ An arm value `plugin:DIR` loads a Claude Code plugin in every session instead of
 once per pair with `--pair A,B`.
 
 If a hidden check turns out to be wrong, fix it and run `bench.py recheck --out DIR`; no session needs to rerun.
+
+Token counts come from each session's transcript when `claude -p` reports less (it does when a background task
+resumed the session); the CLI number stays in `reported_tokens`. `bench.py retokens --out DIR` recounts a run
+recorded before this. With three or more arms, `run --pair A,B` (repeatable) judges only those pairs, and
+`--judge-jobs N` runs N verdicts at a time; verdicts already on disk are kept.
 
 ## What one run does
 

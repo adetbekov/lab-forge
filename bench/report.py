@@ -56,6 +56,8 @@ TSV = (
     "mutants_killed",
     "mutants_applied",
     "n_files",
+    # v0.4.1: tokens `claude -p` reported when the session transcript showed more (tokens then come from it)
+    "reported_tokens",
 )
 
 

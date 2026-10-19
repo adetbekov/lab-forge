@@ -1,6 +1,6 @@
 ---
 name: self-review
-description: Checks the agent's own diff for slop before showing it - extra code, needless abstractions, swallowed errors, style drift, unrequested changes. Use this before presenting an M or bigger code change (several steps or files), before a PR, and whenever the user says "review", "check your code", "too much code", "simplify" or "that's slop".
+description: Checks your own diff for slop before showing it: extra code, needless abstractions, swallowed errors, style drift, unrequested changes. Use before presenting an M or bigger change or a PR, and when the user says "review", "too much code", "simplify" or "that's slop".
 ---
 
 # self-review
