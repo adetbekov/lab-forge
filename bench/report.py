@@ -56,6 +56,9 @@ TSV = (
     "mutants_killed",
     "mutants_applied",
     "n_files",
+    # v0.4.1: what `claude -p` reported when the session transcript showed more (tokens, cost then come from it)
+    "reported_tokens",
+    "reported_cost_usd",
 )
 
 

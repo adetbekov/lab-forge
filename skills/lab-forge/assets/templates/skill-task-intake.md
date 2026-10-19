@@ -1,6 +1,6 @@
 ---
 name: task-intake
-description: Sizes any incoming task (S/M/L/XL), decomposes it into small checkable steps and, only for big tasks, writes a short plan before coding. Use this whenever the user gives a new task, feature, bug, ticket or idea that is not an obvious one-line change, says "let's do", "new task", "groom", "break it down", "plan", "decompose", or pastes a ticket.
+description: Sizes a new task (S/M/L/XL), splits it into checkable steps and, for big tasks only, writes a short plan before coding. Use when the user gives a task, ticket or idea that is not a one-line change, or says "new task", "break it down", "plan", "decompose".
 ---
 
 # task-intake

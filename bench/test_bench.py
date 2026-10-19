@@ -99,6 +99,25 @@ def test_claude_returns_the_four_usage_fields(monkeypatch, tmp_path):
     assert tokens == 1070 and cost == 0.5 and got == usage
 
 
+def test_transcript_wins_when_the_cli_under_reports(monkeypatch, tmp_path):
+    """A background task resumed the session: the CLI saw one call, the transcript has two (one streamed twice)."""
+    call = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 1000, "cache_creation_input_tokens": 0}
+    lines = [
+        {"type": "assistant", "message": {"id": "a", "usage": call}},
+        {"type": "assistant", "message": {"id": "a", "usage": call}},
+        {"type": "user", "message": {"content": "x"}},
+        {"type": "assistant", "message": {"id": "b", "usage": call}},
+    ]
+    session = tmp_path / ".claude" / "projects" / "p" / "s1.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    out = json.dumps({"result": "ok", "usage": call, "total_cost_usd": 0.1, "num_turns": 1, "session_id": "s1"})
+    monkeypatch.setattr(bench, "sh", lambda *a, **k: types.SimpleNamespace(stdout=out, stderr=""))
+    _, tokens, turns, _, cost, got = bench.claude("p", tmp_path, tmp_path, None)
+    assert tokens == 2000 and turns == 2 and abs(cost - 0.2) < 1e-9
+    assert got["reported"] == {"tokens": 1000, "cost_usd": 0.1}
+
+
 def verdict(x, y, winner):
     code = dict.fromkeys(("success", "correctness", "practices", "optimality", "bloat", "scope"), 4)
     return {

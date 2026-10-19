@@ -60,6 +60,8 @@ Over budget -> cut or move detail into a skill; never shrink by removing the
 - Facts only: commands, paths, invariants, domain words. Anything about how to
   work (branches, scope, task size, style, replies) is in the global layer;
   writing it again here is drift.
+- The file is sent with every model call, so every line costs tokens in every
+  session: no intro prose, no file-by-file tour, one fact per line.
 - The profile's `## Repo block` goes in as is, markers included, in place of
   `{{profile_block}}`. Never shorten or reword it: a paraphrase drops the rule
   that matters (v0.3 turned "own split per fitted step" into "nothing chosen on

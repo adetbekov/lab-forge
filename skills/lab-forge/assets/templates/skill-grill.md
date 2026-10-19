@@ -1,6 +1,6 @@
 ---
 name: grill
-description: Decides whether to ask the user before acting, and asks as a real choice of 2-4 options, never "here is my recommendation, agree?". Use it whenever a request is short or ambiguous, the user may know something the code does not (data, deadlines, consumers, conventions, past decisions), two reasonable approaches lead to different code, or the user says "grill me", "ask me", "stress-test", "уточни", "спроси".
+description: Decides whether to ask before acting and asks as a real choice of 2-4 options. Use when a request is short or ambiguous, the user may know what the code does not (data, deadlines, consumers, past decisions), two reasonable approaches differ, or the user says "grill me", "ask me", "уточни", "спроси".
 ---
 
 # grill

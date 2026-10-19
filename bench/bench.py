@@ -10,6 +10,7 @@
     python bench/bench.py pack --out /tmp/lfb                   #   blind X/Y review prompts, both orders
     python bench/bench.py report --out /tmp/lfb                 #   report.md + runs.tsv
     python bench/bench.py rebuild --out /tmp/re --runs R/runs.tsv --verdicts R/verdicts/a-b --pair a,b
+    python bench/bench.py retokens --out /tmp/lfb                # tokens from session transcripts, older runs
 
 See bench/README.md for the protocol and the metric-to-pain map.
 """
@@ -296,7 +297,9 @@ class Bench:
         m["mode"] = mode
         if usage:
             m |= {col: usage.get(field) for field, (col, _) in USAGE.items()}
-            m["weighted_tokens"] = sum(w * (usage.get(field) or 0) for field, (_, w) in USAGE.items())
+            m["weighted_tokens"] = weigh(usage)
+            if usage.get("reported"):  # the CLI under-reported; tokens and cost come from the transcript
+                m |= {f"reported_{k}": v for k, v in usage["reported"].items()}
         m |= self.diff_metrics(root, prev, tree, case.get("scope"))
         m["n_files"] = len(m["files"])
         branch = git(root, "branch", "--show-current").strip()
@@ -426,6 +429,33 @@ class Bench:
                     prev = st["steps"][st["order"][i - 1]]["tree"] if i else st["base_tree"]
                     m |= self.checks(root, case, sid, m["files"], prev, m["tree"])
                     print(ws, sid, m["solved"], m["check"])
+            self.save(ws, st)
+
+    def retokens(self):
+        """Recount tokens of recorded steps from their transcripts in HOME, for runs before `honest()`.
+
+        Steps and sessions pair up in start order; a workspace whose session count differs is skipped.
+        """
+        for ws in self.workspaces():
+            st = self.state(ws)
+            found = []
+            for path in (self.out / "home" / ws / ".claude" / "projects").glob("*/*.jsonl"):
+                stamps = [json.loads(line).get("timestamp") for line in path.read_text().splitlines()]
+                found.append((min(t for t in stamps if t), path))
+            if len(found) != len(st["order"]):
+                print(ws, f"{len(found)} transcripts for {len(st['order'])} steps: skipped")
+                continue
+            for sid, (_, path) in zip(st["order"], sorted(found)):
+                m = st["steps"][sid]
+                if m.get("reported_tokens") is not None:
+                    continue
+                usage = {field: m.get(col) for field, (col, _) in USAGE.items()}
+                usage, tokens, turns, cost, reported = honest(usage, m["cost_usd"], m["tools"], path)
+                if reported:
+                    m |= {col: usage[field] for field, (col, _) in USAGE.items()}
+                    m |= {"tokens": tokens, "tools": turns, "cost_usd": cost, "weighted_tokens": weigh(usage)}
+                    m |= {f"reported_{k}": v for k, v in reported.items()}
+                    print(ws, sid, "reported", reported["tokens"], "transcript", tokens)
             self.save(ws, st)
 
     # ---- blind review -----------------------------------------------------------------------------------------------
@@ -638,6 +668,41 @@ def prepare(args):
                 print("prepared", ws)
 
 
+def transcript_usage(path):
+    """USAGE fields summed over a session transcript's model calls, and the number of calls.
+
+    `claude -p` reports only the last stretch of a session that a background task resumed; the transcript
+    has every call. Streamed blocks of one call repeat its usage, so each message id counts once.
+    """
+    calls = {}
+    for line in Path(path).read_text().splitlines():
+        rec = json.loads(line)
+        msg = rec.get("message") or {}
+        if rec.get("type") == "assistant" and msg.get("usage"):
+            calls[msg.get("id")] = msg["usage"]
+    return {k: sum(u.get(k) or 0 for u in calls.values()) for k in USAGE}, len(calls)
+
+
+def weigh(usage):
+    return sum(w * (usage.get(field) or 0) for field, (_, w) in USAGE.items())
+
+
+def honest(usage, cost, turns, path):
+    """The transcript's usage when the CLI under-reports it; cost scaled by the session's own weighted rate.
+
+    Returns (usage, tokens, turns, cost, reported) where reported is None if the CLI numbers stood.
+    """
+    tokens = sum(v or 0 for v in usage.values())
+    if not path:
+        return usage, tokens, turns, cost, None
+    full, calls = transcript_usage(path)
+    if sum(full.values()) <= tokens:
+        return usage, tokens, turns, cost, None
+    # shortcut: the CLI gives no per-model prices, so the missing calls are priced at the reported calls' rate
+    scaled = cost * weigh(full) / weigh(usage) if cost is not None and weigh(usage) else cost
+    return full, sum(full.values()), max(turns, calls), scaled, {"tokens": tokens, "cost_usd": cost}
+
+
 def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=(), plugin=None):
     """One fresh headless session. Auth comes from ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
 
@@ -655,19 +720,14 @@ def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=(), plugin
         sys.exit(f"claude failed in {cwd}: {res.stderr[-500:] or res.stdout[-500:]}")
     if data.get("is_error"):
         sys.exit(f"claude error in {cwd}: {data.get('result')}")
-    usage = data.get("usage", {})
-    tokens = sum(
-        usage.get(k, 0)
-        for k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+    usage = {k: data.get("usage", {}).get(k) for k in USAGE}
+    found = sorted(Path(home, ".claude", "projects").glob(f"*/{data.get('session_id')}.jsonl"))
+    usage, tokens, turns, cost, reported = honest(
+        usage, data.get("total_cost_usd"), data.get("num_turns", 0), found[0] if found else None
     )
-    return (
-        data.get("result", ""),
-        tokens,
-        data.get("num_turns", 0),
-        data.get("duration_ms", 0),
-        data.get("total_cost_usd"),
-        {k: usage.get(k) for k in USAGE},
-    )
+    if reported:
+        usage["reported"] = reported
+    return data.get("result", ""), tokens, turns, data.get("duration_ms", 0), cost, usage
 
 
 def run(args):
@@ -692,11 +752,17 @@ def run(args):
         with ThreadPoolExecutor(args.jobs) as pool:
             list(pool.map(one, todo))
     arms = list(b.cfg["arms"])
-    pairs = [None] if len(arms) == 2 else [list(p) for p in combinations(arms, 2)]
+    pairs = [None] if len(arms) == 2 else args.pair or [list(p) for p in combinations(arms, 2)]
+
+    def judge(prompt):
+        out = prompt.with_name(prompt.name.replace(".prompt.md", ".verdict.md"))
+        if out.exists() and verdict(out):  # a resumed run keeps the verdicts it already has
+            return
+        out.write_text(claude(prompt.read_text(), prompt.parent, b.out / "home" / "judge", args.judge_model)[0])
+
     for pair in pairs:
-        for prompt in b.pack(pair):
-            reply = claude(prompt.read_text(), prompt.parent, b.out / "home" / "judge", args.judge_model)[0]
-            prompt.with_name(prompt.name.replace(".prompt.md", ".verdict.md")).write_text(reply)
+        with ThreadPoolExecutor(args.judge_jobs) as pool:
+            list(pool.map(judge, b.pack(pair)))
         b.report(pair)
     print(b.report())
 
@@ -704,7 +770,7 @@ def run(args):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("all", "prepare", "run", "next", "record", "recheck", "pack", "report", "rebuild"):
+    for name in ("all", "prepare", "run", "next", "record", "recheck", "retokens", "pack", "report", "rebuild"):
         s = sub.add_parser(name)
         s.add_argument("--out", required=True)
         if name in ("all", "prepare"):
@@ -724,6 +790,10 @@ def main():
             s.add_argument("--model", default=None)
             s.add_argument("--judge-model", default="claude-fable-5-1", help="another model line than the agents'")
             s.add_argument("--jobs", type=int, default=4)
+            s.add_argument("--judge-jobs", type=int, default=1, help="blind verdicts run in parallel")
+            s.add_argument(
+                "--pair", action="append", type=lambda v: v.split(","), help="A,B: judge only these pairs (3+ arms)"
+            )
         if name in ("pack", "report", "rebuild"):
             s.add_argument("--pair", type=lambda v: v.split(","), help="A,B: the two arms to compare")
         if name == "record":
@@ -762,6 +832,8 @@ def main():
         print(json.dumps({k: v for k, v in m.items() if k not in ("files", "tree")}))
     elif args.cmd == "recheck":
         Bench(args.out).recheck()
+    elif args.cmd == "retokens":
+        Bench(args.out).retokens()
     elif args.cmd == "pack":
         print("\n".join(map(str, Bench(args.out).pack(args.pair))))
     elif args.cmd == "report":

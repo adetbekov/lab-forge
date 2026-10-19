@@ -36,7 +36,7 @@ from pathlib import Path
 
 import guard
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 ENGINE = Path(__file__).resolve().parent.parent
 BEGIN, END = "<!-- lab-forge:begin", "<!-- lab-forge:end -->"
 # the core block of a harness or repo file: any lab-forge block but a profile (v0.3 wrote no layer name)

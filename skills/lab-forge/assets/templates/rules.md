@@ -1,9 +1,6 @@
 # {{project_name}}
 
-Project facts for every agent. How to work comes from the global rules; do not repeat them here.
-
 ## Commands
-Copied from the project, never invented; each runs from the root as written.
 - Test: `{{test_command}}`
 - Lint: `{{lint_command}}`
 - Run: `{{run_command}}`
@@ -27,7 +24,7 @@ Copied from the project, never invented; each runs from the root as written.
 
 ## Languages
 Identifiers: {{lang_code}}. Comments and docstrings: {{lang_comments}}. Commits: {{lang_commits}}.
-AI co-author trailer: {{coauthor_policy}}; a policy set by the harness or environment wins.
+AI co-author trailer: {{coauthor_policy}} (a harness or environment policy wins).
 
 ## Overrides
-Written by tune. A line may replace a D rule (`replaces D<n>`) or add one; it never relaxes a C or P rule.
+Written by tune; a line may replace a D rule, never relax a C or P rule.

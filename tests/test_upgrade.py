@@ -95,11 +95,11 @@ def test_upgrade_from_repo_only_versions_keeps_facts_and_hand_lines(tmp_path, ve
     assert "Size the task first" not in agents and "| task-intake |" not in agents
     assert agents.count("<!-- lab-forge:begin profile classic-ml ") == 1
     assert (repo / "CLAUDE.md").read_text() == "@AGENTS.md\n"
-    assert "- Version: 0.4.0" in (repo / ".lab-forge" / "state.md").read_text()
+    assert "- Version: 0.4.1" in (repo / ".lab-forge" / "state.md").read_text()
     lf = home / ".lab-forge"
     assert "C5." in (lf / "core.md").read_text() and "C5." in (lf / "AGENTS.md").read_text()
     claude_md = (home / ".claude" / "CLAUDE.md").read_text()
-    assert claude_md.startswith("<!-- lab-forge:begin core v=0.4.0 sha=") and f"@{lf / 'AGENTS.md'}" in claude_md
+    assert claude_md.startswith("<!-- lab-forge:begin core v=0.4.1 sha=") and f"@{lf / 'AGENTS.md'}" in claude_md
     backups = list((lf / "backup").glob("*/**/churn/AGENTS.md"))
     assert len(backups) == 1 and backups[0].read_bytes() == before[str(repo / "AGENTS.md")]
     verify = subprocess.run([sys.executable, str(SCRIPTS / "verify_setup.py"), str(repo)], capture_output=True,
@@ -127,10 +127,10 @@ def test_upgrade_from_v03_replaces_legacy_blocks_once(tmp_path):
     assert res.returncode == 0, res.stdout + res.stderr
     assert "global: 0.3" in res.stdout
     claude_md = (tmp_path / ".claude" / "CLAUDE.md").read_text()
-    assert claude_md.startswith("my own line\n\n<!-- lab-forge:begin core v=0.4.0 ") and claude_md.count("begin") == 1
+    assert claude_md.startswith("my own line\n\n<!-- lab-forge:begin core v=0.4.1 ") and claude_md.count("begin") == 1
     codex = (tmp_path / ".codex" / "AGENTS.md").read_text()
     assert f"pong {CANARY}" in codex and "C5." in codex and "- Answer in Russian." in codex
-    assert "- Version: 0.4.0" in (lf / "state.md").read_text() and f"- Canary: {CANARY}" in (lf / "state.md").read_text()
+    assert "- Version: 0.4.1" in (lf / "state.md").read_text() and f"- Canary: {CANARY}" in (lf / "state.md").read_text()
     hooks = json.loads((tmp_path / ".claude" / "settings.json").read_text())["hooks"]["PreToolUse"]
     assert len(hooks) == 1
     assert script("install_global.py", "check", home=tmp_path).returncode == 0
@@ -143,7 +143,7 @@ def test_edit_inside_v03_block_merges(tmp_path):
     assert res.returncode == 0, res.stdout + res.stderr
     codex = (tmp_path / ".codex" / "AGENTS.md").read_text()
     assert "Team rule: answer in Kazakh to Aigerim." in codex and "C5." in codex and "<<<<<<<" not in codex
-    assert codex.count("lab-forge:begin core v=0.4.0") == 1
+    assert codex.count("lab-forge:begin core v=0.4.1") == 1
     assert "DRIFT (edited by hand)" in script("install_global.py", "check", home=tmp_path).stdout
     assert "up to date" in upgrade(tmp_path).stdout  # the merged edit is not merged again
 
