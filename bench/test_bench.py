@@ -114,8 +114,7 @@ def test_transcript_wins_when_the_cli_under_reports(monkeypatch, tmp_path):
     out = json.dumps({"result": "ok", "usage": call, "total_cost_usd": 0.1, "num_turns": 1, "session_id": "s1"})
     monkeypatch.setattr(bench, "sh", lambda *a, **k: types.SimpleNamespace(stdout=out, stderr=""))
     _, tokens, turns, _, cost, got = bench.claude("p", tmp_path, tmp_path, None)
-    assert tokens == 2000 and turns == 2 and abs(cost - 0.2) < 1e-9
-    assert got["reported"] == {"tokens": 1000, "cost_usd": 0.1}
+    assert tokens == 2000 and turns == 2 and cost == 0.1 and got["reported_tokens"] == 1000
 
 
 def verdict(x, y, winner):

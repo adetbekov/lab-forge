@@ -298,8 +298,8 @@ class Bench:
         if usage:
             m |= {col: usage.get(field) for field, (col, _) in USAGE.items()}
             m["weighted_tokens"] = weigh(usage)
-            if usage.get("reported"):  # the CLI under-reported; tokens and cost come from the transcript
-                m |= {f"reported_{k}": v for k, v in usage["reported"].items()}
+            if usage.get("reported_tokens"):  # the CLI under-reported; tokens come from the transcript
+                m["reported_tokens"] = usage["reported_tokens"]
         m |= self.diff_metrics(root, prev, tree, case.get("scope"))
         m["n_files"] = len(m["files"])
         branch = git(root, "branch", "--show-current").strip()
@@ -450,12 +450,16 @@ class Bench:
                 if m.get("reported_tokens") is not None:
                     continue
                 usage = {field: m.get(col) for field, (col, _) in USAGE.items()}
-                usage, tokens, turns, cost, reported = honest(usage, m["cost_usd"], m["tools"], path)
+                usage, tokens, turns, reported = honest(usage, m["tools"], path)
                 if reported:
                     m |= {col: usage[field] for field, (col, _) in USAGE.items()}
-                    m |= {"tokens": tokens, "tools": turns, "cost_usd": cost, "weighted_tokens": weigh(usage)}
-                    m |= {f"reported_{k}": v for k, v in reported.items()}
-                    print(ws, sid, "reported", reported["tokens"], "transcript", tokens)
+                    m |= {
+                        "tokens": tokens,
+                        "tools": turns,
+                        "weighted_tokens": weigh(usage),
+                        "reported_tokens": reported,
+                    }
+                    print(ws, sid, "reported", reported, "transcript", tokens)
             self.save(ws, st)
 
     # ---- blind review -----------------------------------------------------------------------------------------------
@@ -687,20 +691,18 @@ def weigh(usage):
     return sum(w * (usage.get(field) or 0) for field, (_, w) in USAGE.items())
 
 
-def honest(usage, cost, turns, path):
-    """The transcript's usage when the CLI under-reports it; cost scaled by the session's own weighted rate.
+def honest(usage, turns, path):
+    """The transcript's usage when the CLI under-reports it. `total_cost_usd` already covers the whole session.
 
-    Returns (usage, tokens, turns, cost, reported) where reported is None if the CLI numbers stood.
+    Returns (usage, tokens, turns, reported_tokens) where reported_tokens is None if the CLI numbers stood.
     """
     tokens = sum(v or 0 for v in usage.values())
     if not path:
-        return usage, tokens, turns, cost, None
+        return usage, tokens, turns, None
     full, calls = transcript_usage(path)
     if sum(full.values()) <= tokens:
-        return usage, tokens, turns, cost, None
-    # shortcut: the CLI gives no per-model prices, so the missing calls are priced at the reported calls' rate
-    scaled = cost * weigh(full) / weigh(usage) if cost is not None and weigh(usage) else cost
-    return full, sum(full.values()), max(turns, calls), scaled, {"tokens": tokens, "cost_usd": cost}
+        return usage, tokens, turns, None
+    return full, sum(full.values()), max(turns, calls), tokens
 
 
 def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=(), plugin=None):
@@ -722,12 +724,10 @@ def claude(prompt, cwd, home, model, add_dir=None, timeout=3600, keys=(), plugin
         sys.exit(f"claude error in {cwd}: {data.get('result')}")
     usage = {k: data.get("usage", {}).get(k) for k in USAGE}
     found = sorted(Path(home, ".claude", "projects").glob(f"*/{data.get('session_id')}.jsonl"))
-    usage, tokens, turns, cost, reported = honest(
-        usage, data.get("total_cost_usd"), data.get("num_turns", 0), found[0] if found else None
-    )
+    usage, tokens, turns, reported = honest(usage, data.get("num_turns", 0), found[0] if found else None)
     if reported:
-        usage["reported"] = reported
-    return data.get("result", ""), tokens, turns, data.get("duration_ms", 0), cost, usage
+        usage["reported_tokens"] = reported
+    return data.get("result", ""), tokens, turns, data.get("duration_ms", 0), data.get("total_cost_usd"), usage
 
 
 def run(args):
