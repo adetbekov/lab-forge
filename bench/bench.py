@@ -439,7 +439,7 @@ class Bench:
         for ws in self.workspaces():
             st = self.state(ws)
             found = []
-            for path in (self.out / "home" / ws / ".claude" / "projects").glob("*/*.jsonl"):
+            for path in (self.out / "home" / ws / ".claude" / "projects").glob(f"*{ws}/*.jsonl"):  # not smoke.py's
                 stamps = [json.loads(line).get("timestamp") for line in path.read_text().splitlines()]
                 found.append((min(t for t in stamps if t), path))
             if len(found) != len(st["order"]):
