@@ -1,0 +1,129 @@
+--- /dev/null
++++ ~/.lab-forge/state.md
+@@ -0,0 +1,7 @@
++# lab-forge global state
++
++- Version: 0.4.0
++- Canary: LF-8a937039
++- Harnesses: claude
++
++## Log
+--- ~/.claude/CLAUDE.md
++++ ~/.claude/CLAUDE.md
+@@ -1 +1,6 @@
+ my own global line
++
++<!-- lab-forge:begin core v=0.4.0 sha=c32204fa6885: managed copy of ~/.lab-forge; edit there or tune, then `sync` -->
++@~/.lab-forge/AGENTS.md
++@~/.lab-forge/overrides.md
++<!-- lab-forge:end -->
+--- /dev/null
++++ ~/.claude/settings.json
+@@ -0,0 +1,15 @@
++{
++  "hooks": {
++    "PreToolUse": [
++      {
++        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
++        "hooks": [
++          {
++            "type": "command",
++            "command": "\"/usr/bin/python3.13\" \"~/.lab-forge/hooks/guard.py\" hook"
++          }
++        ]
++      }
++    ]
++  }
++}
+--- ~/churn/AGENTS.md
++++ ~/churn/AGENTS.md
+@@ -1,55 +1,37 @@
+-# Rules for AI agents - churn
++# churn
+ 
+-Canonical rules for every agent in this repo. Other agent files point here.
++Project facts for every agent. How to work comes from the global rules; do not repeat them here.
+ 
+ ## Read first
+ - README.md - what really exists in the code
+ - docs/style.md - code style details (only if the project has it)
+ 
+ ## Invariants
+-Breaking one is a bug, not a style comment.
++<!-- lab-forge:begin profile classic-ml sha=d37f00ba73ed -->
++P1. Each fitted step (scaling, encoding, calibration, threshold, early stopping, search) learns on rows
++    it is not evaluated on: its own split or CV inside the training rows. The threshold is never
++    picked on the rows the calibrator was fitted on.
++P2. Split and seeds come from config; every compared model gets the same split and metric.
++P3. Target and features cover the same period and population; nothing from after the prediction date.
++P4. Data, model files and per-run metrics are not committed; only the baseline metrics file is.
++P5. Bare `pytest` from the root is green. A new project gets a minimal `pyproject.toml` (name, deps,
++    `[tool.pytest.ini_options]` `pythonpath = ["."]`); it is setup, not layout.
++<!-- lab-forge:end -->
+ 1. Customer ids never leave the VPC; logs show hashed ids only.
+ 2. Scores are probabilities in [0, 1].
+ 3. The churn label is 60 days without a purchase.
+ 
+-## Size the task first
+-- S (one clear change): do it, show the diff. No plan file.
+-- M (several steps): short plan in chat, wait for "ok", then step by step, check after each.
+-- L (new module, pipeline, agent, unclear scope): use skill `task-intake`, written plan, confirm, execute step by step.
+-- XL (irreversible or architectural): as L, plus a short decision note if the user agrees.
+-Unsure between two sizes: ask one question, do not pick the bigger one.
+-
+ ## How code is written here
+-1. Smallest diff that solves the task. No drive-by refactors or reformatting.
+ 2. Follow existing patterns: `src/churn/features.py`, `src/churn/train.py`.
+-3. Base abstraction + thin implementations when there are 2+ cases; one case -> write it directly.
+ 4. Parameters live in `params.toml`, not in code.
+ 5. Exploration in `notebooks/`; production code in `src/churn/` has no notebook cells.
+-6. No swallowed exceptions, no silent fallbacks, no sleeps to hide timing problems.
+ 7. No new dependencies without asking. Logging via `logging.getLogger(__name__)`, not print.
+ 8. Every metric goes next to the baseline in one table, never alone.
+-9. Something does not work -> stop and say it. No quiet workaround.
+ 10. Use polars, not pandas, for new code.
+ 
+ ## Check before saying "done"
+ - Run: `pytest`, `ruff check .`
+ - For DS changes: metric vs baseline in `reports/metrics.json`.
+-- Run skill `self-review` on your diff.
+ 
+ ## Languages
+ Identifiers: English. Comments and docstrings: English. Commits: English.
+-
+-## Delivery
+-Commits: one logical change, small, no AI co-author lines, no emoji.
+-PR: skill `pr-description`. Wiki: skill `wiki-page`. Slides: skill `star-deck`.
+-
+-## Skills - use them when the context matches
+-| Skill | When |
+-|---|---|
+-| task-intake | any task that is not obviously S |
+-| self-review | before presenting any code change |
+-| experiment | hypothesis, model or prompt change, anything measured |
+-| pr-description | preparing a PR/MR |
+-| wiki-page | results or design written for others |
+-| star-deck | presentation of results |
+-| grill-me | user asks to stress-test a plan |
+--- ~/churn/CLAUDE.md
++++ ~/churn/CLAUDE.md
+@@ -1,3 +1 @@
+-Read AGENTS.md in the repository root before any action. It holds the
+-canonical rules, task sizes and the skills list for every agent here. Not
+-duplicated in this file on purpose, to avoid drift.
++@AGENTS.md
+--- ~/churn/.lab-forge/state.md
++++ ~/churn/.lab-forge/state.md
+@@ -2,6 +2,7 @@
+ 
+ Written by lab-forge. Tune mode reads this to know what it owns.
+ 
++- Version: 0.4.0
+ - Deployed: 2026-10-17, style pack: yeldos
+ - Agents confirmed working: Claude Code (CLAUDE.md)
+ - Level: 2
+@@ -15,3 +16,4 @@
+ 
+ ## Log
+ - 2026-10-17 deploy
++- 2026-10-18 upgrade 0.1 -> 0.4.0

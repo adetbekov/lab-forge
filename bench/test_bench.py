@@ -176,3 +176,9 @@ def test_mutant_killed_survived_or_not_reached(tmp_path):
     (tmp_path / "test_a.py").write_text("def test_nothing():\n    assert True\n")
     assert b.mutant(py, tmp_path, mu, ["test_a.py"]) == "survived"  # the entry point reaches it, the tests do not
     assert b.mutant(py, tmp_path, mu | {"run": "-c pass"}, ["test_a.py"]) == "n/a"
+
+
+def test_verdict_skips_inline_json_fence_in_prose(tmp_path):
+    path = tmp_path / "v.verdict.md"
+    path.write_text('Fences like `` ```json{ `` fall through.\n\n```json\n{"winner": {"overall": "X"}}\n```\n')
+    assert bench.verdict(path) == {"winner": {"overall": "X"}}

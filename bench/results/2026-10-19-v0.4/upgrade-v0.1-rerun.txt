@@ -1,0 +1,3 @@
+decide: off. Optional: a decision model checks "done?" and hints skills; bring your own endpoint and key (hosted d1-ultra, local d1-omni or any /v1/systemone API): install --decide hosted|local|custom, see references/generation.md section 8
+global: 0.4.0; repos: ~/churn: 0.4.0; engine: 0.4.0
+up to date: no changes
