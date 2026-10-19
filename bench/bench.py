@@ -520,7 +520,7 @@ class Bench:
 
 
 def verdict(path):
-    block = re.findall(r"```json\s*(\{.*?\})\s*```", path.read_text(), re.DOTALL)
+    block = re.findall(r"^```json\s*(\{.*?\})\s*^```", path.read_text(), re.DOTALL | re.MULTILINE)  # fences only
     return json.loads(block[-1]) if block else None
 
 
