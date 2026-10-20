@@ -270,3 +270,23 @@ def test_forecast_check_catches_horizon_leaks():
         return lags(df).assign(market=df["date"].map(daily))
 
     assert "other stores" in check.leaks(market)
+
+
+def test_forecast_check_accepts_a_horizon_rejected_up_front(tmp_path, monkeypatch):
+    pytest.importorskip("pandas")
+    check = load_check("forecast")
+    pkg = tmp_path / "forecast"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "features.py").write_text(
+        "import pandas as pd\n\n\n"
+        "def make_features(df, horizon=7, lags=(7, 14)):\n"
+        "    if min(lags) < horizon:\n"
+        "        raise ValueError('lag shorter than horizon')\n"
+        "    s = df.sort_values(['store_id', 'date']).groupby('store_id')['sales']\n"
+        "    return pd.DataFrame({f'lag_{k}': s.shift(k) for k in lags}).loc[df.index]\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(check, "run", lambda *a: (None, {"m.mae": 1.0}))
+    monkeypatch.setattr(check, "values", lambda flat, name: [1.0] * 8)
+    assert "best_model" in check.main("P2")  # past the leak probes, on to the metrics

@@ -47,10 +47,14 @@ def numeric(frame):
     return out.drop(columns=[c for c in out.columns if str(c) in {"store_id", "sales"}])
 
 
+class Shape(Exception):
+    """The function's output does not line up with its input."""
+
+
 def call(make, frame, horizon):
     out = pd.DataFrame(make(frame.copy()) if horizon is None else make(frame.copy(), horizon=horizon))
     if len(out) != len(frame) or set(out.index) != set(frame.index):
-        raise ValueError("make_features must return one row per input row, with the input's index")
+        raise Shape("make_features must return one row per input row, with the input's index")
     return out
 
 
@@ -115,8 +119,13 @@ def main(step):
             return leaks(make)
         if "horizon" not in inspect.signature(make).parameters:
             return "make_features has no horizon parameter"
-        error = leaks(make, 7) or leaks(make, 14)
-    except ValueError as exc:
+        error = leaks(make, 7)
+        if not error:
+            try:
+                error = leaks(make, 14)
+            except ValueError:  # rejected horizon 14 with its default lags, e.g. a lag of 7; `--horizon 14` runs below
+                pass
+    except (Shape, ValueError) as exc:
         error = str(exc)
     if error:
         return error
