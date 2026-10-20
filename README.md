@@ -33,29 +33,6 @@ Main bench: 4 DS/ML cases × 3 repeats on Sonnet 5.5 ([v0.4.1 report](bench/resu
 | Mutants killed by the agent's own tests | 16/24 | 18/24 | 15/24 | 7/15 |
 | Steps committed straight to `main` | 0/24 | 0/24 | 0/24 | 24/24 |
 | Ruff errors in changed files | 15 | 27 | 15 | 44 |
-| Tokens per solved task | 424k (**+5%**) | 526k | 417k | 403k |
-| Cost per solved task | $0.288 (**+13%**) | $0.35 | $0.28 | $0.254 |
-
-Two new hard cases with leakage traps (card fraud, sales forecast), v0.4.1 vs bare on Sonnet 5.5,
-one repeat, so a direction, not a measurement ([report](bench/results/2026-10-20-sonnet-hard/report.md)):
-
-| | v0.4.1 | bare agent |
-|---|---|---|
-| Blind overall winner | tie, tie | tie, tie |
-| Solved, hidden checks | 4/4 | 4/4 |
-| Mutants killed by the agent's own tests | **9/9** | 5/9 |
-| Bare `pytest` green after each step | **4/4** | 2/4 |
-| Python lines changed | 624 | 742 |
-| Coding time, min | **14.5** | 36.1 |
-| Cost per solved coding step | $0.32 | $0.29 |
-
-Where it is not better:
-
-- **Cost.** +13% per solved task on the main bench, +10% on the hard cases, plus a one-off deploy of
-  about 643k tokens ($0.30) per project. The always-loaded rules are most of that gap, and they carry the win.
-- **Mutants.** v0.4.1 catches 16/24, two fewer than v0.4.
-- **Tune carry-over.** A tune phrase reached the next session in 4 of 12 repeats.
-- **Model size.** Bare Opus 5.5 beats v0.4.1 on Sonnet in blind review, at about 3x the cost per step.
 
 ## Quick start
 
