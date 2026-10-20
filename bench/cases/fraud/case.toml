@@ -1,0 +1,97 @@
+title = "New project, classic ML with time and user leakage traps: card fraud detection"
+kind = "new"
+packages = ["numpy", "pandas", "scikit-learn", "pytest", "ruff"]
+pytest = "all"
+brief = "a classic tabular ML project — card-fraud detection on transaction histories with scikit-learn and pandas, Python 3.12, pytest, ruff, metrics written to JSON files, no experiment tracker, data synthetic/local only."
+review = "Run `.venv/bin/python -m fraud.train` and `.venv/bin/python -m fraud.train --as-of 2024-09-01` from the snapshot root with no install and no PYTHONPATH, then pytest and ruff. Check point-in-time correctness of every history feature (only the same user's strictly earlier transactions), the time-ordered train/validation/test split, that the threshold is chosen on validation only, that `--as-of` keeps every later row out of features, fitting and evaluation, and that the costs are computed right."
+
+[[steps]]
+id = "P1"
+kind = "code"
+prompt = "Start the project: a card-fraud detection baseline. Generate a synthetic, seeded transactions dataset (~20k rows, about 1% fraud, timestamps from 2024-01-01 to 2024-12-31) with exactly these columns: transaction_id, user_id, timestamp, amount, merchant_category, is_fraud. Fraud must depend on the user's behaviour (for example a burst of transactions or an amount far above that user's usual). Build per-transaction features from the user's history in `fraud.features.build_features(df) -> pandas.DataFrame`, one row per input row with the input's index: at least the user's number of transactions in the previous 24 hours and the ratio of the amount to that user's mean amount so far. A transaction's features may use only that user's earlier transactions. Split by time (the latest 20% of transactions are the test set), train a logistic regression and a gradient boosting model, and write the PR-AUC (average precision) of both on the test set to `reports/metrics.json`. It must be runnable as `python -m fraud.train` from the project root and have pytest tests. Commit when done."
+
+[[steps]]
+id = "P2"
+kind = "code"
+prompt = "Next step for the fraud model. A missed fraud costs 50 and a false alarm costs 1. Carve a validation period out of the end of the training period (by time, before the test set), pick the gradient boosting decision threshold that minimizes total cost on validation, and add to `reports/metrics.json`, next to the PR-AUCs: the threshold, and on the test set the precision, recall and total cost at that threshold plus the cost of flagging nothing. Add a feature: the user's number of distinct merchant categories in the previous 7 days, under the same earlier-transactions-only rule. `python -m fraud.train --as-of YYYY-MM-DD` must run as if today were that date: no transaction at or after it is used anywhere (features, training, validation, test); record the number of training rows as `n_train` in the metrics. Read the model hyperparameters from a config file. Update the tests. `python -m fraud.train` must still work from the project root. Commit when done."
+
+[[steps]]
+id = "T"
+kind = "tune"
+prompt = "From now on, answer my questions about this project in Russian."
+
+[[steps]]
+id = "P3"
+kind = "question"
+prompt = "How is the data split into train / validation / test, what guarantees that a transaction's features never see later transactions, and where is the decision threshold chosen? Answer briefly with file:line references."
+
+# Hand-written breaks for "do the tests bite"; see cases/churn/case.toml for how they load.
+[[mutants]]
+id = "scores-inverted"
+steps = ["P1", "P2"]
+run = "-m fraud.train"
+breaks = "predict_proba of the common classifiers returns the class columns swapped"
+patch = '''
+import functools
+
+from sklearn.ensemble import GradientBoostingClassifier, HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+
+for cls in (GradientBoostingClassifier, HistGradientBoostingClassifier, RandomForestClassifier, LogisticRegression):
+
+    def wrap(predict_proba):
+        @functools.wraps(predict_proba)
+        def inverted(self, X):
+            hit()
+            return predict_proba(self, X)[:, ::-1]
+
+        return inverted
+
+    cls.predict_proba = wrap(cls.predict_proba)
+'''
+
+[[mutants]]
+id = "time-order-reversed"
+steps = ["P1", "P2"]
+run = "-m fraud.train"
+breaks = "DataFrame.sort_values and Series.sort_values sort in the opposite direction, so 'earlier' becomes 'later'"
+patch = '''
+import functools
+
+import pandas as pd
+
+for cls in (pd.DataFrame, pd.Series):
+
+    def wrap(sort_values):
+        @functools.wraps(sort_values)
+        def reversed_sort(self, *args, ascending=True, **kwargs):
+            hit()
+            flip = [not a for a in ascending] if isinstance(ascending, (list, tuple)) else not ascending
+            return sort_values(self, *args, ascending=flip, **kwargs)
+
+        return reversed_sort
+
+    cls.sort_values = wrap(cls.sort_values)
+'''
+
+[[mutants]]
+id = "costs-swapped"
+steps = ["P2"]
+run = "-m fraud.train"
+breaks = "confusion_matrix returns false positives and false negatives swapped"
+patch = '''
+import sklearn.metrics as sm
+
+_cm = sm.confusion_matrix
+
+
+def confusion_matrix(*args, **kwargs):
+    hit()
+    m = _cm(*args, **kwargs).copy()
+    if m.shape == (2, 2):
+        m[0, 1], m[1, 0] = m[1, 0], m[0, 1]
+    return m
+
+
+sm.confusion_matrix = confusion_matrix
+'''

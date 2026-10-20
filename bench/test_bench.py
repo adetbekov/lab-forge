@@ -1,10 +1,13 @@
 """Unit tests for the pure parts of the bench: python -m pytest bench"""
 
+import importlib.util
 import json
+import subprocess
 import sys
 import types
 from pathlib import Path
 
+import pytest
 from report import build, read_tsv
 
 import bench
@@ -200,3 +203,70 @@ def test_verdict_skips_inline_json_fence_in_prose(tmp_path):
     path = tmp_path / "v.verdict.md"
     path.write_text('Fences like `` ```json{ `` fall through.\n\n```json\n{"winner": {"overall": "X"}}\n```\n')
     assert bench.verdict(path) == {"winner": {"overall": "X"}}
+
+
+def load_check(case):
+    spec = importlib.util.spec_from_file_location(f"check_{case}", Path(bench.BENCH) / "cases" / case / "check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_hard_cases_are_well_formed():
+    cases = bench.load_cases(["fraud", "forecast"])
+    assert set(cases) == {"fraud", "forecast"}
+    for case in cases.values():
+        assert [s["id"] for s in case["steps"]] == ["P1", "P2", "T", "P3"]
+        for mu in case["mutants"]:
+            compile(bench.MUTANT_HEAD.format(breaks=mu["breaks"]) + mu["patch"], mu["id"], "exec")
+            assert set(mu["steps"]) <= {"P1", "P2"}
+
+
+def test_hard_case_checks_fail_on_an_empty_project(tmp_path):
+    pytest.importorskip("pandas")
+    for case in ("fraud", "forecast"):
+        check = Path(bench.BENCH) / "cases" / case / "check.py"
+        res = subprocess.run(
+            [sys.executable, str(check), "P1"], cwd=tmp_path, capture_output=True, text=True, check=False
+        )
+        assert res.returncode == 1 and "exit 1" in res.stdout
+
+
+def test_fraud_check_catches_history_leaks():
+    pd = pytest.importorskip("pandas")
+    check = load_check("fraud")
+
+    def history(df, count=lambda g: g.cumcount(), by="user_id"):
+        d = df.sort_values("timestamp", kind="stable")
+        g = d.groupby(by)
+        out = pd.DataFrame({"n_prev": count(g), "amount": d["amount"]}, index=d.index)
+        out["ratio"] = d["amount"] / g["amount"].transform(lambda a: a.shift().expanding().mean()).fillna(d["amount"])
+        return out.loc[df.index]
+
+    assert check.leaks(history, 2) is None
+    assert "future leak" in check.leaks(lambda df: history(df, count=lambda g: g["amount"].transform("size")), 2)
+    assert "other users" in check.leaks(lambda df: history(df, by=df["merchant_category"]), 2)
+    assert "is_fraud" in check.leaks(lambda df: history(df).assign(n_prev=df["is_fraud"].cumsum()), 2)
+    assert "at least 4" in check.leaks(history, 4)
+
+
+def test_forecast_check_catches_horizon_leaks():
+    pd = pytest.importorskip("pandas")
+    check = load_check("forecast")
+
+    def lags(df, horizon=1, roll=True):
+        d = df.sort_values(["store_id", "date"])
+        s = d.groupby("store_id")["sales"]
+        out = pd.DataFrame({"lag": s.shift(horizon), "dow": d["date"].dt.dayofweek}, index=d.index)
+        out["roll"] = s.transform(lambda x: x.shift(horizon if roll else 0).rolling(7).mean())
+        return out.loc[df.index]
+
+    assert check.leaks(lags) is None and check.leaks(lags, 7) is None and check.leaks(lags, 14) is None
+    assert "leak" in check.leaks(lambda df: lags(df, roll=False))  # rolling mean includes the day itself
+    assert "leak" in check.leaks(lambda df, horizon=7: lags(df), 7)  # horizon accepted, ignored
+
+    def market(df):  # yesterday's mean over all stores: past only, but not the store's own
+        daily = df.groupby("date")["sales"].mean().shift()
+        return lags(df).assign(market=df["date"].map(daily))
+
+    assert "other stores" in check.leaks(market)
