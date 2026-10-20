@@ -1,28 +1,65 @@
-# lab-forge
+<p align="center">
+  <img src="docs/assets/header.webp" alt="lab-forge — agent skill for data scientists" width="100%">
+</p>
 
-An agent skill that sets up an AI coding environment for data science, ML and
-AI projects, and then gets out of the way.
+<p align="center">
+  <a href="https://github.com/adetbekov/lab-forge/tags"><img src="https://img.shields.io/github/v/tag/adetbekov/lab-forge?label=version" alt="version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="license MIT"></a>
+  <a href="https://agentskills.io"><img src="https://img.shields.io/badge/format-Agent%20Skills-8a2be2" alt="Agent Skills"></a>
+  <img src="https://img.shields.io/badge/agents-Claude%20Code%20%7C%20Codex%20%7C%20Cursor%20%7C%20Copilot-555" alt="agents: Claude Code, Codex, Cursor, Copilot">
+  <a href="https://github.com/adetbekov/lab-forge/actions/workflows/tests.yml"><img src="https://github.com/adetbekov/lab-forge/actions/workflows/tests.yml/badge.svg?branch=main" alt="tests"></a>
+</p>
 
-You run it once. It reads your machine and your repos, asks only what it could
-not detect, and writes a small set of rules, skills and commands that make the
-agent work the way you do. Later runs only tune what is already there.
+**lab-forge is an agent skill that sets up your coding agent for data science and ML work.**
 
-Status: **v0.3, experimental.** On the [bench](bench/README.md) it solves every hidden check
-(8/8), changes 57% fewer lines than a plain agent and wins the blind review 3:1 against
-v0.2, 4:0 against [ponytail](https://github.com/DietrichGebert/ponytail) and 3:1 against
-a plain agent ([report](bench/results/2026-10-18-v0.3/report.md)).
+A plain coding agent in a DS/ML repo writes more code than the task needs, leaks future data into
+validation, adds tests that would pass on broken code, edits files nobody asked about, and says "done"
+before the output exists. lab-forge installs a small set of rules, skills and guards once, then stays out
+of the way. You tune it with one phrase, not by editing prompts.
 
-## What it fixes
+## Proof
 
-The usual complaints about a plain coding agent: too much code, edits outside
-the task, new tests and edge cases nobody asked for, stale docs, forgetting
-context between sessions, wasted tokens, no questions when it should ask, and a
-different style every time.
+Same tasks, fresh isolated sessions, hidden checks, blind X/Y review by Fable 5.1.
+Main bench: 4 DS/ML cases × 3 repeats on Sonnet 5.5 ([v0.4.1 report](bench/results/2026-10-19-v0.4.1/report.md),
+[all arms](bench/results/2026-10-19-v0.4.1/all-arms.md), [v0.4 report](bench/results/2026-10-19-v0.4/report.md)).
 
-## Install
+| | v0.4.1 | v0.4 | v0.3 | bare agent |
+|---|---|---|---|---|
+| Weighted code score, blind, 1-5 (v0.4.1 vs bare) | **4.55** | — | — | 4.28 |
+| Blind head to head, v0.4.1 wins : losses | — | 6 : 4 | — | **10 : 2** |
+| Solved, hidden checks | 24/24 | 21/24 | 24/24 | 24/24 |
+| Claimed "done" but the check fails | **0/24** | 3/24 | 0/24 | 0/24 |
+| Bare `pytest` green after each step | **23/23** | 24/24 | 22/22 | 14/24 |
+| Mutants killed by the agent's own tests | 16/24 | 18/24 | 15/24 | 7/15 |
+| Steps committed straight to `main` | 0/24 | 0/24 | 0/24 | 24/24 |
+| Ruff errors in changed files | 15 | 27 | 15 | 44 |
+| Tokens per solved task | 424k (**+5%**) | 526k | 417k | 403k |
+| Cost per solved task | $0.288 (**+13%**) | $0.35 | $0.28 | $0.254 |
 
-The skill lives in `skills/lab-forge/` in the [Agent Skills](https://agentskills.io)
-format (`SKILL.md` plus references and scripts).
+Two new hard cases with leakage traps (card fraud, sales forecast), v0.4.1 vs bare on Sonnet 5.5,
+one repeat, so a direction, not a measurement ([report](bench/results/2026-10-20-sonnet-hard/report.md)):
+
+| | v0.4.1 | bare agent |
+|---|---|---|
+| Blind overall winner | tie, tie | tie, tie |
+| Solved, hidden checks | 4/4 | 4/4 |
+| Mutants killed by the agent's own tests | **9/9** | 5/9 |
+| Bare `pytest` green after each step | **4/4** | 2/4 |
+| Python lines changed | 624 | 742 |
+| Coding time, min | **14.5** | 36.1 |
+| Cost per solved coding step | $0.32 | $0.29 |
+
+Where it is not better:
+
+- **Cost.** +13% per solved task on the main bench, +10% on the hard cases, plus a one-off deploy of
+  about 643k tokens ($0.30) per project. The always-loaded rules are most of that gap, and they carry the win.
+- **Mutants.** v0.4.1 catches 16/24, two fewer than v0.4.
+- **Tune carry-over.** A tune phrase reached the next session in 4 of 12 repeats.
+- **Model size.** Bare Opus 5.5 beats v0.4.1 on Sonnet in blind review, at about 3x the cost per step.
+
+## Quick start
+
+The skill lives in `skills/lab-forge/` in the [Agent Skills](https://agentskills.io) format.
 
 | Agent | Copy `skills/lab-forge` to |
 |---|---|
@@ -31,34 +68,34 @@ format (`SKILL.md` plus references and scripts).
 | Codex and other `AGENTS.md` agents | `.agents/skills/` |
 | Cursor | `.cursor/skills/` |
 
-Then ask the agent: "set up lab-forge for this project". On first use it installs the
-global layer once per machine (`scripts/install_global.py install`): working rules in
-`~/.lab-forge/`, a pointer in each agent's global file, and a hook that blocks edits on
-`main`. Each repo keeps only its facts in `AGENTS.md`; an empty project gets seed mode
-(that file plus two skills). Bundled skills go to your user skills folder once.
-`scripts/smoke.py` checks that every agent really loads the rules.
+Then tell the agent:
+
+> set up lab-forge for this project
+
+To upgrade from an older version, check the diff first, then apply it (a backup is made):
+
+```bash
+python skills/lab-forge/scripts/upgrade.py --dry-run
+python skills/lab-forge/scripts/upgrade.py --apply
+```
 
 ## How it works
 
-1. **Detect.** Agent, OS, tools, network, and how much you are allowed to change in each repo.
-2. **Audit.** Mechanical checks plus a manual read, so problems come with proposed fixes.
-3. **Interview.** Only the questions detection could not answer, each as a real choice of 2-4 options.
-4. **Generate.** One canonical rules file, thin pointers for other agents, skills and commands, all within line budgets.
-5. **Record.** `.lab-forge/state.md` lists what it owns, so tune mode edits instead of rebuilding.
-6. **Tune.** Say "fewer tests" or "пиши короче" once. The agent writes one override line, shows the diff, and `undo` reverts it.
+- **Core, defaults, profile.** One rule set per machine in `~/.lab-forge/`: a short core (≤30 lines),
+  defaults you can override, and a profile (classic ML or LLM agents) copied into the repo `AGENTS.md`.
+  Each repo keeps only its own facts; other agents get a pointer, not a copy.
+- **Protected core.** The core and profile blocks change only through install or upgrade. A hook blocks
+  agent edits to them and edits on `main`, and tune refuses phrases that would weaken a core rule.
+- **Done means checked.** Before "done", the agent runs the task's entry point and checks that every
+  file, key and metric the task names is there.
+- **Tune.** Say "fewer tests" or "пиши короче" once. The agent writes one override line, shows the diff,
+  and `undo` reverts it.
+- **Upgrade.** `upgrade.py` moves v0.1-v0.4 installs to the current engine. A second run prints "up to date".
 
-The style pack in `skills/lab-forge/style-pack/` holds the author's principles
-and bundled skills. Swap it out and the engine serves someone else's style.
+Design and trade-offs: [`docs/architecture.md`](docs/architecture.md).
 
-## Roadmap
+## Links
 
-- Model routing: small tasks on a cheaper model, hard ones escalated after a failed check
-- Repeatable A/B benchmark across new, small and large projects
-
-## Credits
-
-The `grill` skill builds on `grill-me` from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
-
-## License
-
-MIT
+- [Bench](bench/README.md): how every change is measured, and all past results.
+- The `grill` skill builds on `grill-me` from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
+- License: [MIT](LICENSE).
