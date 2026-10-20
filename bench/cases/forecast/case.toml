@@ -1,0 +1,101 @@
+title = "New project, time series with a horizon trap: daily demand forecasting"
+kind = "new"
+packages = ["numpy", "pandas", "scikit-learn", "pytest", "ruff"]
+pytest = "all"
+brief = "a demand-forecasting project — daily store sales, lag features and a rolling-origin backtest with scikit-learn and pandas, Python 3.12, pytest, ruff, metrics written to JSON files, no experiment tracker, data synthetic/local only."
+review = "Run `.venv/bin/python -m forecast.backtest` and `.venv/bin/python -m forecast.backtest --horizon 14` from the snapshot root with no install and no PYTHONPATH, then pytest and ruff. Check that every feature for day d uses only that store's sales from d - horizon or earlier (the same for the seasonal-naive baseline), that each fold fits only on data before its test window, and that MAE and WAPE are computed right."
+
+[[steps]]
+id = "P1"
+kind = "code"
+prompt = "Start the project: a daily demand forecasting baseline. Generate a synthetic, seeded dataset of daily unit sales for 10 stores from 2023-01-01 to 2024-12-31 with columns date, store_id, sales (weekly seasonality, trend, noise). Expose `forecast.features.make_features(df) -> pandas.DataFrame`, one row per input row with the input's index, with lag and rolling-mean features of each store's own past sales. Compare two models in a rolling-origin backtest with 3 folds, each a 28-day test window right after its training data: a seasonal-naive baseline (sales on the same weekday one week earlier) and a gradient boosting regressor on the features. Write the MAE of each model per fold and on average to `reports/metrics.json`. It must be runnable as `python -m forecast.backtest` from the project root and have pytest tests. Commit when done."
+
+[[steps]]
+id = "P2"
+kind = "code"
+prompt = "Next step for the forecaster: forecasts are issued 7 days ahead, so on day d we only know sales up to day d-7. Add a `horizon` parameter to `make_features(df, horizon=7)` so a day's features use only sales from at least `horizon` days earlier, and make the whole backtest respect it, the baseline included. Add WAPE next to MAE for every model and fold and on average, and record the model with the lower mean WAPE as `best_model` in `reports/metrics.json`. Read the horizon and the gradient boosting hyperparameters from a config file; `python -m forecast.backtest --horizon 14` must override the config. Update the tests. Commit when done."
+
+[[steps]]
+id = "T"
+kind = "tune"
+prompt = "From now on, answer my questions about this project in Russian."
+
+[[steps]]
+id = "P3"
+kind = "question"
+prompt = "How are the backtest folds built, what guarantees that a day's features never use sales the forecaster would not know yet, and where do I change the horizon? Answer briefly with file:line references."
+
+# Hand-written breaks for "do the tests bite"; see cases/churn/case.toml for how they load.
+[[mutants]]
+id = "shift-dropped"
+steps = ["P1", "P2"]
+run = "-m forecast.backtest"
+breaks = "every pandas shift (Series, DataFrame, groupby) returns the values unshifted"
+patch = '''
+import functools
+
+import pandas as pd
+from pandas.core.groupby.groupby import GroupBy
+
+for cls in (pd.Series, pd.DataFrame, GroupBy):
+
+    def wrap(shift):
+        @functools.wraps(shift)
+        def unshifted(self, periods=1, *args, **kwargs):
+            hit()
+            return shift(self, 0, *args, **kwargs)
+
+        return unshifted
+
+    cls.shift = wrap(cls.shift)
+'''
+
+[[mutants]]
+id = "predictions-scaled"
+steps = ["P1", "P2"]
+run = "-m forecast.backtest"
+breaks = "predict of the common regressors returns 1.5 times the real prediction"
+patch = '''
+import functools
+
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import LinearRegression, Ridge
+
+for cls in (GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor, LinearRegression, Ridge):
+
+    def wrap(predict):
+        @functools.wraps(predict)
+        def scaled(self, X):
+            hit()
+            return predict(self, X) * 1.5
+
+        return scaled
+
+    cls.predict = wrap(cls.predict)
+'''
+
+[[mutants]]
+id = "horizon-ignored"
+steps = ["P2"]
+run = "-m forecast.backtest"
+breaks = "pandas shift by more than one period shifts by one, so a horizon of 7 or 14 behaves like 1"
+patch = '''
+import functools
+
+import pandas as pd
+from pandas.core.groupby.groupby import GroupBy
+
+for cls in (pd.Series, pd.DataFrame, GroupBy):
+
+    def wrap(shift):
+        @functools.wraps(shift)
+        def one(self, periods=1, *args, **kwargs):
+            if isinstance(periods, int) and periods > 1:
+                hit()
+                periods = 1
+            return shift(self, periods, *args, **kwargs)
+
+        return one
+
+    cls.shift = wrap(cls.shift)
+'''

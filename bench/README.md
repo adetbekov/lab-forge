@@ -3,7 +3,8 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest results: [`results/2026-10-19-v0.4.1`](results/2026-10-19-v0.4.1/report.md) (v0.4.1 vs v0.4, bare),
+Latest results: [`results/2026-10-20-sonnet-hard`](results/2026-10-20-sonnet-hard/report.md) (v0.4.1 vs bare on Sonnet,
+`fraud` and `forecast`), [`results/2026-10-19-v0.4.1`](results/2026-10-19-v0.4.1/report.md) (v0.4.1 vs v0.4, bare),
 [`results/2026-10-19-v0.4`](results/2026-10-19-v0.4/report.md) (v0.4 vs v0.3, bare),
 [`results/2026-10-18-v0.3`](results/2026-10-18-v0.3/report.md) (v0.3 vs v0.2, ponytail, bare),
 [`results/2026-10-18-skillpick`](results/2026-10-18-skillpick/notes.md),
@@ -24,14 +25,15 @@ Needs `git`, `uv`, Python 3.11+, and the `claude` CLI authenticated through `ANT
 ```bash
 python bench/bench.py all --out /tmp/lfb                      # lab-forge (skills/lab-forge) vs bare agent, 2 repeats
 python bench/bench.py all --out /tmp/lfb --arm new=path/to/skill --arm old=skills/lab-forge
-python bench/bench.py all --out /tmp/lfb --cases churn --reps 1 --model claude-sonnet-5-5   # quick smoke
+python bench/bench.py all --out /tmp/lfb --cases churn fraud --reps 1 --model claude-sonnet-5-5   # quick smoke
 python bench/bench.py all --out /tmp/lfb --arm lab=skills/lab-forge --arm pony=plugin:path/to/plugin --arm bare=
 python bench/bench.py all --out /tmp/lfb --arm decide=skills/lab-forge --arm main=skills/lab-forge --decide decide=hosted
 ```
 
 The result is `/tmp/lfb/report.md` and `/tmp/lfb/runs.tsv`. Only those two files and the verdicts go into
-`results/<date>-<what>/`; workspaces and logs stay out of git. A full run is 72 sessions plus 8 verdicts,
-about 4M tokens.
+`results/<date>-<what>/`; workspaces and logs stay out of git. A run of the four original cases with 2 repeats is 72
+sessions plus 8 verdicts, about 4M tokens; `fraud` and `forecast` add 18 sessions and 4 verdicts per repeat, about
+4.6M tokens on Sonnet 5.5.
 
 ### Without a headless CLI (agent-driven)
 
@@ -64,6 +66,8 @@ recorded before this. With three or more arms, `run --pair A,B` (repeatable) jud
 | `rparse` | empty dir | new LLM app: receipt parser, fake client, golden set |
 | `optuna` | `optuna/optuna@v5.0.0`, ~70k lines | existing large repo |
 | `encoders` | `scikit-learn-contrib/category_encoders@v2.11.1`, ~8k lines | existing small repo |
+| `fraud` | empty dir | new project, hard: per-user history features, time split, cost threshold, `--as-of` |
+| `forecast` | empty dir | new project, hard: store lags, rolling-origin backtest, forecast horizon |
 
 Each workspace runs these steps, each in a fresh session with no memory. The user is "unavailable", so the
 agent works in batch mode.
