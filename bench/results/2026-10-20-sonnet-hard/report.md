@@ -67,7 +67,38 @@ Tune: both v0.4.1 projects wrote "Answer questions about this project in Russian
 `AGENTS.md` (imported by `CLAUDE.md`), yet the next session answered in English, the same as bare. The
 v0.4.1 run got 4/12 here; with n=2 this is not a finding yet, but it is the one place v0.4.1 did not beat bare.
 
-The generated report follows.
+## Follow-up: v0.4.1 on Sonnet vs bare Opus 5.5
+
+Asked after the run: does a skill on the cheaper model beat the bigger model without one? No. Bare Opus wins
+all 4 verdicts overall (both cases, both X/Y orders; the order flipped the winner in 1 of 8 step calls), at
+about 3x the cost per solved step. Full generated report: [`v041-opus.md`](v041-opus.md), verdicts in
+`verdicts/v041-opus/`.
+
+| Metric | v0.4.1 on Sonnet | bare on Opus |
+|---|---|---|
+| Blind weighted code score, 1-5 | 4.0 | 4.6 |
+| Blind overall winner (fraud, forecast) | — | 2/2, both orders |
+| Solved, hidden checks | 4/4 | 4/4 |
+| Mutants killed by the agent's tests | 9/9 | 7/9 |
+| Bare `pytest` green after step | 4/4 | 4/4 |
+| Python lines changed | 624 | 1521 |
+| Task tokens, k | 1761 | 2483 |
+| `cost_usd` per solved coding step | 0.32 | 0.93 |
+| `cost_usd`, all sessions incl. deploy | 1.88 | 3.71 |
+| Coding time, min | 14.5 | 14.4 |
+| Tune phrase applied in the next session | 0/2 | 2/2 |
+
+The judge's reasons: Opus closed the forecast horizon end to end (it also moves each fold's training cutoff
+back by the horizon, which v0.4.1 did not, and tested it), handled timestamp ties and the flag-nothing threshold
+in fraud, wrote tamper tests, and its P3 answers had exact refs. v0.4.1 wins on size: half the code, rated
+5.0 vs 3.1 on bloat. The hidden checks do not cover the training cutoff, so this leak shows only in review.
+
+Same out dir and seed: the v0.4.1 workspaces are the ones above, unchanged; the `opus` arm (empty skill)
+ran with `bench.py run --model claude-opus-5-5 --pair v041,opus`. Two verdicts ended on a note about a
+background check without JSON and were judged again from the same prompt. `runs.tsv` now holds all three arms;
+it has no model column: `v041` and `bare` ran on Sonnet 5.5, `opus` on Opus 5.5.
+
+The generated report (v0.4.1 vs bare on Sonnet) follows.
 
 ## Generated report: v041 vs bare
 
