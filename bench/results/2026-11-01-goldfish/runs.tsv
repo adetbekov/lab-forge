@@ -1,0 +1,11 @@
+ws	case	arm	rep	step	tokens	tools	ms	cost_usd	solved	check	pytest	ruff_errors	bad_imports	loc_py	loc_all	ai_loc	tests_added	max_new_file	out_of_scope	committed	on_main	questions	reply_words	russian	mode	input_tokens	output_tokens	cache_read_tokens	cache_write_tokens	weighted_tokens	bare_pytest	mutants_killed	mutants_applied	n_files	reported_tokens
+forecast-06490d	forecast	v041gf	1	P0	881902	21	125309	0.416	—	—	—	—	—	0	14	150	0	0	0	True	False	0	325	—	headless	42	8743	806998	66119	172133.550	—	—	—	2	806003
+forecast-06490d	forecast	v041gf	1	P1	496510	15	167770	0.326	True	ok	True	0	0	190	227	0	6	74	0	True	False	0	335	—	headless	30	11501	435575	49404	116843.500	True	1	2	9	440924
+forecast-06490d	forecast	v041gf	1	P2	581960	16	3281	0.362	True	ok	True	0	0	120	157	0	4	0	0	True	False	0	100	—	headless	36	12281	514626	55017	132550.850	True	2	3	5	46406
+forecast-99e9aa	forecast	baregf	1	P1	344924	12	598078	0.250	True	ok	True	0	0	168	217	0	5	62	0	True	True	0	395	—	headless	24	8050	299423	37427	84800.050	True	1	2	8	316942
+forecast-99e9aa	forecast	baregf	1	P2	545804	17	48243	0.327	True	ok	True	0	0	181	215	0	6	0	0	True	True	0	457	—	headless	36	11999	487794	45975	118283.150	True	2	3	5	206666
+fraud-7bfad0	fraud	v041gf	1	P0	666703	17	88006	0.385	—	—	—	—	—	0	18	148	0	0	0	True	False	0	299	—	headless	34	9773	592458	64438	149600.300	—	—	—	2	591006
+fraud-7bfad0	fraud	v041gf	1	P1	517698	14	31525	0.372	True	ok	True	0	0	245	268	2	7	88	0	True	False	0	472	—	headless	30	14836	451637	51195	124023.450	True	2	2	8	184093
+fraud-7bfad0	fraud	v041gf	1	P2	638741	16	33220	0.412	True	ok	True	0	0	172	193	0	6	0	0	True	False	0	446	—	headless	34	14086	562965	61656	147486.500	True	2	2	5	160605
+fraud-be6769	fraud	baregf	1	P1	304729	11	125006	0.257	True	ok	True	0	0	234	254	0	6	69	0	True	True	0	384	—	headless	22	9576	255941	39190	84179.600	False	1	2	8	258171
+fraud-be6769	fraud	baregf	1	P2	488905	15	36181	0.303	True	ok	True	1	0	139	155	0	5	0	0	True	True	0	405	—	headless	32	9595	433184	46094	110562.900	False	1	2	5	162437

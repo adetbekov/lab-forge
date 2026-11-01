@@ -1,0 +1,7 @@
+ws	case	arm	rep	step	tokens	tools	ms	cost_usd	solved	check	pytest	ruff_errors	bad_imports	loc_py	loc_all	ai_loc	tests_added	max_new_file	out_of_scope	committed	on_main	questions	reply_words	russian	mode	input_tokens	output_tokens	cache_read_tokens	cache_write_tokens	weighted_tokens	bare_pytest	mutants_killed	mutants_applied	n_files	reported_tokens
+forecast-090990	forecast	egmlf	1	P0	681229	14	2444	0.326	—	—	—	—	—	0	19	152	0	0	0	True	False	0	34	—	headless	30	7582	626741	46876	128881.100	—	—	—	2	58043
+forecast-090990	forecast	egmlf	1	P1	2000431	50	563921	1.535	True	ok	True	0	0	337	390	6	17	87	0	True	False	0	443	—	headless	100	69262	1726045	205024	498246.500	True	1	2	11	1595774
+forecast-87cc8d	forecast	egm	1	P1	1611315	43	437000	1.413	False	reports/metrics.json: 6 MAE values, expected 2 models x (3 folds + mean)	True	0	0	335	418	0	13	92	0	True	True	0	466	—	headless	86	66735	1357547	186947	436259.450	True	1	2	11	1308026
+fraud-083ed7	fraud	egm	1	P1	1942704	46	498970	1.567	False	reports/metrics.json: fewer than two PR-AUC values in (0, 1]	True	0	0	454	554	0	15	114	0	True	True	0	460	—	headless	92	71134	1671559	199919	488280.650	True	2	2	11	1650059
+fraud-092bdf	fraud	egmlf	1	P0	606339	14	71754	0.307	—	—	—	—	—	0	19	151	0	0	0	True	False	0	328	—	headless	26	7132	554017	45164	119014.700	—	—	—	2	—
+fraud-092bdf	fraud	egmlf	1	P1	2401772	50	553690	1.853	True	ok	True	0	0	415	470	2	15	123	0	True	False	0	498	—	headless	100	85741	2077030	238901	592170.250	True	1	2	11	1981380

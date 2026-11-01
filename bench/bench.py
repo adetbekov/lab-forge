@@ -232,6 +232,8 @@ class Bench:
     def steps(self, ws):
         st = self.state(ws)
         steps = self.cases[st["case"]]["steps"]
+        if self.cfg.get("steps"):
+            steps = [s for s in steps if s["id"] in self.cfg["steps"]]
         if self.cfg["arms"][st["arm"]] and not self.cfg["arms"][st["arm"]].startswith(PLUGIN):
             steps = [{"id": "P0", "kind": "deploy"}, *steps]
         return st, steps
@@ -606,12 +608,18 @@ def prepare(args):
             shutil.copytree(Path(skill).resolve(), dest)
             arms[name] = str(dest)
     decide = dict(a.split("=", 1) for a in args.decide or [])
+    home_extra = {a: str(Path(d).resolve()) for a, d in (x.split("=", 1) for x in args.home_extra or [])}
+    plugins = {a: str(Path(d).resolve()) for a, d in (x.split("=", 1) for x in args.plugin or [])}
     cases = load_cases(args.cases)
     out.mkdir(parents=True, exist_ok=True)
     (out / "state").mkdir(exist_ok=True)
     (out / "bench.json").write_text(
         json.dumps(
-            {"arms": arms, "reps": args.reps, "seed": args.seed, "cases": list(cases), "decide": decide}, indent=1
+            {"arms": arms, "reps": args.reps, "seed": args.seed, "cases": list(cases), "decide": decide}
+            | ({"home_extra": home_extra} if home_extra else {})
+            | ({"plugins": plugins} if plugins else {})
+            | ({"steps": args.steps} if args.steps else {}),
+            indent=1,
         )
     )
     env = {**os.environ, "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", str(out / ".uvcache"))}
@@ -631,6 +639,11 @@ def prepare(args):
                     shutil.copytree(
                         Path(arms[arm].removeprefix(PLUGIN)) / "skills", out / "home" / ws / ".claude" / "skills"
                     )
+                if arm in home_extra:  # user-level agents/ and CLAUDE.md for this arm only
+                    shutil.copytree(home_extra[arm], out / "home" / ws / ".claude", dirs_exist_ok=True)
+                    rules = out / "home" / ws / ".claude" / "CLAUDE.md"
+                    if arm in plugins and rules.exists():  # rules may name the extra plugin's files
+                        rules.write_text(rules.read_text().replace("{plugin}", plugins[arm]))
                 if case["kind"] == "existing":
                     shutil.copytree(src, root, ignore=shutil.ignore_patterns(".git"), symlinks=True)
                 else:
@@ -679,7 +692,9 @@ def transcript_usage(path):
     has every call. Streamed blocks of one call repeat its usage, so each message id counts once.
     """
     calls = {}
-    for line in Path(path).read_text().splitlines():
+    path = Path(path)  # subagents (Agent tool) have their own transcripts, and the CLI usage skips them
+    files = [path, *sorted(path.with_suffix("").glob("subagents/*.jsonl"))]
+    for line in (line for f in files for line in f.read_text().splitlines()):
         rec = json.loads(line)
         msg = rec.get("message") or {}
         if rec.get("type") == "assistant" and msg.get("usage"):
@@ -744,13 +759,18 @@ def run(args):
                 args.model,
                 b.cfg["arms"][arm] if step["kind"] == "deploy" else None,
                 keys=["LIQUID_AI_API_KEY"] if b.cfg.get("decide", {}).get(arm) == "hosted" else [],
-                plugin=b.cfg["arms"][arm].removeprefix(PLUGIN) if b.cfg["arms"][arm].startswith(PLUGIN) else None,
+                plugin=b.cfg["arms"][arm].removeprefix(PLUGIN)
+                if b.cfg["arms"][arm].startswith(PLUGIN)
+                else b.cfg.get("plugins", {}).get(arm),
             )
             b.record(ws, step["id"], tok, turns, ms, reply, cost, usage, mode="headless")
             print(ws, step["id"], tok, "tokens")
 
         with ThreadPoolExecutor(args.jobs) as pool:
             list(pool.map(one, todo))
+    if args.no_judge:
+        print(b.report())
+        return
     arms = list(b.cfg["arms"])
     pairs = [None] if len(arms) == 2 else args.pair or [list(p) for p in combinations(arms, 2)]
 
@@ -786,11 +806,15 @@ def main():
             s.add_argument(
                 "--decide", action="append", help="ARM=hosted|local: that arm's deploy asks for decision hooks"
             )
+            s.add_argument("--home-extra", action="append", help="ARM=DIR: copy DIR into that arm's HOME/.claude")
+            s.add_argument("--plugin", action="append", help="ARM=DIR: also load this plugin in that arm (headless)")
+            s.add_argument("--steps", nargs="*", help="case step ids to run (default: all); skill arms keep P0")
         if name in ("all", "run"):
             s.add_argument("--model", default=None)
             s.add_argument("--judge-model", default="claude-fable-5-1", help="another model line than the agents'")
             s.add_argument("--jobs", type=int, default=4)
             s.add_argument("--judge-jobs", type=int, default=1, help="blind verdicts run in parallel")
+            s.add_argument("--no-judge", action="store_true", help="objective metrics only, no blind verdicts")
             s.add_argument(
                 "--pair", action="append", type=lambda v: v.split(","), help="A,B: judge only these pairs (3+ arms)"
             )
