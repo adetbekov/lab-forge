@@ -3,7 +3,8 @@
 Every lab-forge component goes into `main` only after it wins here. The bench runs the same tasks in fresh,
 isolated sessions with and without a skill, then scores each step with hidden checks and a blind X/Y review.
 
-Latest results: [`results/2026-10-20-sonnet-hard`](results/2026-10-20-sonnet-hard/report.md) (v0.4.1 vs bare on Sonnet,
+Latest results: [`results/2026-11-01-goldfish`](results/2026-11-01-goldfish/report.md) (fresh-context reviewer
+subagent on top of v0.4.1 and bare, `goldfish/`), [`results/2026-10-20-sonnet-hard`](results/2026-10-20-sonnet-hard/report.md) (v0.4.1 vs bare on Sonnet,
 `fraud` and `forecast`), [`results/2026-10-19-v0.4.1`](results/2026-10-19-v0.4.1/report.md) (v0.4.1 vs v0.4, bare),
 [`results/2026-10-19-v0.4`](results/2026-10-19-v0.4/report.md) (v0.4 vs v0.3, bare),
 [`results/2026-10-18-v0.3`](results/2026-10-18-v0.3/report.md) (v0.3 vs v0.2, ponytail, bare),

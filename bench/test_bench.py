@@ -118,6 +118,11 @@ def test_transcript_wins_when_the_cli_under_reports(monkeypatch, tmp_path):
     monkeypatch.setattr(bench, "sh", lambda *a, **k: types.SimpleNamespace(stdout=out, stderr=""))
     _, tokens, turns, _, cost, got = bench.claude("p", tmp_path, tmp_path, None)
     assert tokens == 2000 and turns == 2 and cost == 0.1 and got["reported_tokens"] == 1000
+    sub = session.with_suffix("") / "subagents" / "agent-1.jsonl"
+    sub.parent.mkdir(parents=True)
+    sub.write_text(json.dumps({"type": "assistant", "message": {"id": "c", "usage": call}}) + "\n")
+    _, tokens, turns, _, _, _ = bench.claude("p", tmp_path, tmp_path, None)
+    assert tokens == 3000 and turns == 3  # a subagent's calls count too
 
 
 def verdict(x, y, winner):
@@ -290,3 +295,27 @@ def test_forecast_check_accepts_a_horizon_rejected_up_front(tmp_path, monkeypatc
     monkeypatch.setattr(check, "run", lambda *a: (None, {"m.mae": 1.0}))
     monkeypatch.setattr(check, "values", lambda flat, name: [1.0] * 8)
     assert "best_model" in check.main("P2")  # past the leak probes, on to the metrics
+
+
+def test_home_extra_goes_to_one_arm_and_steps_filter(monkeypatch, tmp_path):
+    real_sh = bench.sh
+    monkeypatch.setattr(bench, "sh", lambda cmd, **kw: real_sh(cmd, **kw) if cmd[0] == "git" else None)
+    extra = Path(bench.BENCH) / "goldfish"
+    args = types.SimpleNamespace(
+        out=str(tmp_path),
+        arm=["gf=", "bare="],
+        reps=1,
+        cases=["fraud"],
+        seed=1,
+        python="3.12",
+        decide=None,
+        home_extra=[f"gf={extra}"],
+        steps=["P1", "P2"],
+    )
+    bench.prepare(args)
+    b = bench.Bench(tmp_path)
+    gf, bare = b.ws_name("fraud", "gf", 1), b.ws_name("fraud", "bare", 1)
+    claude_dir = tmp_path / "home" / gf / ".claude"
+    assert (claude_dir / "agents" / "goldfish.md").exists() and "goldfish" in (claude_dir / "CLAUDE.md").read_text()
+    assert not (tmp_path / "home" / bare / ".claude").exists()
+    assert [s["id"] for s in b.steps(gf)[1]] == ["P1", "P2"]
