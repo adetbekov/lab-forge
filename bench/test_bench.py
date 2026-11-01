@@ -303,13 +303,14 @@ def test_home_extra_goes_to_one_arm_and_steps_filter(monkeypatch, tmp_path):
     extra = Path(bench.BENCH) / "goldfish"
     args = types.SimpleNamespace(
         out=str(tmp_path),
-        arm=["gf=", "bare="],
+        arm=["gf=", "bare=", "egm="],
         reps=1,
         cases=["fraud"],
         seed=1,
         python="3.12",
         decide=None,
-        home_extra=[f"gf={extra}"],
+        home_extra=[f"gf={extra}", f"egm={Path(bench.BENCH) / 'egm'}"],
+        plugin=[f"egm={tmp_path / 'egm-plugin'}"],
         steps=["P1", "P2"],
     )
     bench.prepare(args)
@@ -319,3 +320,6 @@ def test_home_extra_goes_to_one_arm_and_steps_filter(monkeypatch, tmp_path):
     assert (claude_dir / "agents" / "goldfish.md").exists() and "goldfish" in (claude_dir / "CLAUDE.md").read_text()
     assert not (tmp_path / "home" / bare / ".claude").exists()
     assert [s["id"] for s in b.steps(gf)[1]] == ["P1", "P2"]
+    rules = (tmp_path / "home" / b.ws_name("fraud", "egm", 1) / ".claude" / "CLAUDE.md").read_text()
+    assert f"{tmp_path / 'egm-plugin'}/skills/egm-draft/SKILL.md" in rules and "{plugin}" not in rules
+    assert b.cfg["plugins"] == {"egm": str(tmp_path / "egm-plugin")}

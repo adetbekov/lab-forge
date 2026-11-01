@@ -609,6 +609,7 @@ def prepare(args):
             arms[name] = str(dest)
     decide = dict(a.split("=", 1) for a in args.decide or [])
     home_extra = {a: str(Path(d).resolve()) for a, d in (x.split("=", 1) for x in args.home_extra or [])}
+    plugins = {a: str(Path(d).resolve()) for a, d in (x.split("=", 1) for x in args.plugin or [])}
     cases = load_cases(args.cases)
     out.mkdir(parents=True, exist_ok=True)
     (out / "state").mkdir(exist_ok=True)
@@ -616,6 +617,7 @@ def prepare(args):
         json.dumps(
             {"arms": arms, "reps": args.reps, "seed": args.seed, "cases": list(cases), "decide": decide}
             | ({"home_extra": home_extra} if home_extra else {})
+            | ({"plugins": plugins} if plugins else {})
             | ({"steps": args.steps} if args.steps else {}),
             indent=1,
         )
@@ -639,6 +641,9 @@ def prepare(args):
                     )
                 if arm in home_extra:  # user-level agents/ and CLAUDE.md for this arm only
                     shutil.copytree(home_extra[arm], out / "home" / ws / ".claude", dirs_exist_ok=True)
+                    rules = out / "home" / ws / ".claude" / "CLAUDE.md"
+                    if arm in plugins and rules.exists():  # rules may name the extra plugin's files
+                        rules.write_text(rules.read_text().replace("{plugin}", plugins[arm]))
                 if case["kind"] == "existing":
                     shutil.copytree(src, root, ignore=shutil.ignore_patterns(".git"), symlinks=True)
                 else:
@@ -754,7 +759,9 @@ def run(args):
                 args.model,
                 b.cfg["arms"][arm] if step["kind"] == "deploy" else None,
                 keys=["LIQUID_AI_API_KEY"] if b.cfg.get("decide", {}).get(arm) == "hosted" else [],
-                plugin=b.cfg["arms"][arm].removeprefix(PLUGIN) if b.cfg["arms"][arm].startswith(PLUGIN) else None,
+                plugin=b.cfg["arms"][arm].removeprefix(PLUGIN)
+                if b.cfg["arms"][arm].startswith(PLUGIN)
+                else b.cfg.get("plugins", {}).get(arm),
             )
             b.record(ws, step["id"], tok, turns, ms, reply, cost, usage, mode="headless")
             print(ws, step["id"], tok, "tokens")
@@ -800,6 +807,7 @@ def main():
                 "--decide", action="append", help="ARM=hosted|local: that arm's deploy asks for decision hooks"
             )
             s.add_argument("--home-extra", action="append", help="ARM=DIR: copy DIR into that arm's HOME/.claude")
+            s.add_argument("--plugin", action="append", help="ARM=DIR: also load this plugin in that arm (headless)")
             s.add_argument("--steps", nargs="*", help="case step ids to run (default: all); skill arms keep P0")
         if name in ("all", "run"):
             s.add_argument("--model", default=None)
