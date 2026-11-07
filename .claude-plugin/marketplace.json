@@ -1,0 +1,17 @@
+{
+  "name": "lab-forge",
+  "owner": {
+    "name": "Yeldos Adetbekov",
+    "url": "https://github.com/adetbekov"
+  },
+  "description": "lab-forge: the agent skill that sets up a coding agent for data science and ML work.",
+  "plugins": [
+    {
+      "name": "lab-forge",
+      "source": "./skills/lab-forge",
+      "description": "Sets up, audits and tunes a coding agent for DS/ML work: short protected core rules, a domain profile, done-means-checked, one-phrase tune.",
+      "category": "productivity",
+      "tags": ["data-science", "machine-learning", "agent-setup", "rules"]
+    }
+  ]
+}

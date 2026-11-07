@@ -36,7 +36,7 @@ from pathlib import Path
 
 import guard
 
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 ENGINE = Path(__file__).resolve().parent.parent
 BEGIN, END = "<!-- lab-forge:begin", "<!-- lab-forge:end -->"
 # the core block of a harness or repo file: any lab-forge block but a profile (v0.3 wrote no layer name)
@@ -51,7 +51,7 @@ DECIDE_OFFER = (
 )
 PENDING = {}  # path -> text to write; read() already sees it, flush() writes it
 CONFLICTS = {}  # path -> merge with conflict markers, written as <path>.rej; the file itself stays
-SKILLS = []  # (dest, "link" | "remove")
+SKILLS = []  # (dest, "link" | "copy" | "remove")
 
 
 def lf_home():
@@ -273,10 +273,17 @@ def put_decide(backend, url=None, model=None, key_env=None):
 
 
 def put_engine(skills_dir):
-    """The engine itself as a user skill, so tune works in every repo. A link where the OS allows it."""
+    """The engine itself as a user skill, so tune works in every repo. A link where the OS allows it.
+
+    Installed as a Claude Code plugin, the engine already loads from the plugin cache: a link into
+    ~/.claude/skills would load it twice and dangle after the next plugin update, so it is skipped.
+    """
     dest = skills_dir / "lab-forge"
+    plugin = Path.home() / ".claude" / "plugins" in ENGINE.parents
+    if plugin and skills_dir == SKILL_DIRS["claude"]:
+        return
     if dest.resolve() != ENGINE:
-        SKILLS.append((dest, "link"))
+        SKILLS.append((dest, "copy" if plugin else "link"))  # the cache path changes per version: copy, not link
 
 
 def install(harnesses, hooks, decide=None, decide_url=None, decide_model=None, decide_key_env=None):
@@ -400,9 +407,11 @@ def flush():
             dest.unlink()
         elif dest.exists():
             print(f"moved your copy of {dest} to {backup(dest, stamp)}")
-        if action == "link":
+        if action in ("link", "copy"):
             dest.parent.mkdir(parents=True, exist_ok=True)
             try:
+                if action == "copy":
+                    raise OSError
                 dest.symlink_to(ENGINE, target_is_directory=True)
             except OSError:
                 shutil.copytree(ENGINE, dest)

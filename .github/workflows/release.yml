@@ -1,0 +1,41 @@
+name: release
+
+# A merge to main that raises VERSION in install_global.py tags v<version> and publishes a GitHub release
+# with that version's CHANGELOG section. Nothing happens while the tag already exists.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read version
+        id: v
+        run: |
+          v=$(sed -n 's/^VERSION = "\([^"]*\)"/\1/p' skills/lab-forge/scripts/install_global.py)
+          test -n "$v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Release notes from CHANGELOG
+        if: steps.v.outputs.exists == 'false'
+        run: |
+          awk -v v="${{ steps.v.outputs.version }}" '
+            /^## \[/ { on = index($0, "## [" v "]") == 1 } on' CHANGELOG.md > notes.md
+          test -s notes.md
+      - name: Tag and release
+        if: steps.v.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.v.outputs.version }}"
+          git tag -a "v$v" -m "lab-forge v$v"
+          git push origin "v$v"
+          gh release create "v$v" --title "lab-forge v$v" --notes-file notes.md

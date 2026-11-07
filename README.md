@@ -36,11 +36,18 @@ Main bench: 4 DS/ML cases × 3 repeats on Sonnet 5.5 ([v0.4.1 report](bench/resu
 
 ## Quick start
 
-The skill lives in `skills/lab-forge/` in the [Agent Skills](https://agentskills.io) format.
+**Claude Code**: install it as a plugin, updates come with `claude plugin update lab-forge@lab-forge`.
+
+```
+/plugin install lab-forge --marketplace adetbekov/lab-forge
+```
+
+**Any other agent**: the skill lives in `skills/lab-forge/` in the [Agent Skills](https://agentskills.io) format.
+Copy that folder, or let the [skills CLI](https://skills.sh) place it: `npx skills add adetbekov/lab-forge`.
 
 | Agent | Copy `skills/lab-forge` to |
 |---|---|
-| Claude Code | `~/.claude/skills/` (all projects) or `.claude/skills/` (one repo) |
+| Claude Code (without the plugin) | `~/.claude/skills/` (all projects) or `.claude/skills/` (one repo) |
 | GitHub Copilot (VS Code) | `.github/skills/` or `.claude/skills/` |
 | Codex and other `AGENTS.md` agents | `.agents/skills/` |
 | Cursor | `.cursor/skills/` |
@@ -49,12 +56,14 @@ Then tell the agent:
 
 > set up lab-forge for this project
 
-To upgrade from an older version, check the diff first, then apply it (a backup is made):
+To upgrade a machine set up by an older version, check the diff first, then apply it (a backup is made):
 
 ```bash
 python skills/lab-forge/scripts/upgrade.py --dry-run
 python skills/lab-forge/scripts/upgrade.py --apply
 ```
+
+Versions are semver, tagged `v<version>` on `main`, listed in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## How it works
 
@@ -67,7 +76,7 @@ python skills/lab-forge/scripts/upgrade.py --apply
   file, key and metric the task names is there.
 - **Tune.** Say "fewer tests" or "пиши короче" once. The agent writes one override line, shows the diff,
   and `undo` reverts it.
-- **Upgrade.** `upgrade.py` moves v0.1-v0.4 installs to the current engine. A second run prints "up to date".
+- **Upgrade.** `upgrade.py` moves v0.1-v0.4.1 installs to the current engine. A second run prints "up to date".
 
 Design and trade-offs: [`docs/architecture.md`](docs/architecture.md).
 
