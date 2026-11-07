@@ -1,7 +1,7 @@
 name: release
 
-# A merge to main that raises VERSION in install_global.py tags v<version> and publishes a GitHub release
-# with that version's CHANGELOG section. Nothing happens while the tag already exists.
+# A merge to main that raises VERSION in install_global.py publishes a GitHub release v<version>; the release
+# creates the tag through the API (no git identity on the runner). Nothing happens while the tag exists.
 
 on:
   push:
@@ -36,6 +36,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ steps.v.outputs.version }}"
-          git tag -a "v$v" -m "lab-forge v$v"
-          git push origin "v$v"
-          gh release create "v$v" --title "lab-forge v$v" --notes-file notes.md
+          gh release create "v$v" --target "$GITHUB_SHA" --title "lab-forge v$v" --notes-file notes.md
