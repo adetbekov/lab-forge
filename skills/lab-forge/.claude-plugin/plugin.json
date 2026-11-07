@@ -1,0 +1,16 @@
+{
+  "name": "lab-forge",
+  "displayName": "lab-forge",
+  "version": "0.5.0",
+  "description": "Sets up, audits and tunes a coding agent for DS/ML work: short protected core rules, a domain profile, done-means-checked, one-phrase tune.",
+  "author": {
+    "name": "Yeldos Adetbekov",
+    "url": "https://github.com/adetbekov"
+  },
+  "homepage": "https://github.com/adetbekov/lab-forge",
+  "repository": "https://github.com/adetbekov/lab-forge",
+  "documentationUrl": "https://github.com/adetbekov/lab-forge#readme",
+  "supportUrl": "https://github.com/adetbekov/lab-forge/issues",
+  "license": "MIT",
+  "keywords": ["data-science", "machine-learning", "agent-setup", "rules", "anti-slop", "tune"]
+}

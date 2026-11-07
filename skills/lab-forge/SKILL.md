@@ -1,5 +1,8 @@
 ---
 name: lab-forge
+license: MIT
+metadata:
+  version: "0.5.0"
 description: Deploys, audits and tunes the AI working environment of a DS/ML/AI engineer in any IDE agent (Claude Code, Copilot, Cursor, Codex, corporate wrappers): onboards the machine and projects, interviews only for gaps, generates rules, skills, commands and guards in the author's style. Use whenever the user wants to set up, onboard, audit or fix their AI coding setup, complains of slop, too much code or wrong style, moves to a new machine or project, or says "lab-forge", "forge", "разверни систему", "настрой агента под меня". Also for tune phrases: "always ...", "never ...", "fewer tests", "пиши короче", "tune: ...".
 ---
 
